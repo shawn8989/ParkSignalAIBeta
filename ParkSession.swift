@@ -1,22 +1,3 @@
-import Foundation
-import SwiftData
-
-@Model
-final class ParkSession {
-    @Attribute(.unique) var id: UUID
-    var startedAt: Date
-    var endedAt: Date?
-
-    init(startedAt: Date = Date(), endedAt: Date? = nil) {
-        self.id = UUID()
-        self.startedAt = startedAt
-        self.endedAt = endedAt
-    }
-
-    var isActive: Bool { endedAt == nil }
-
-    var duration: TimeInterval? {
-        guard let endedAt else { return nil }
-        return max(0, endedAt.timeIntervalSince(startedAt))
-    }
-}
+// Duplicate ParkSession model removed.
+// The canonical ParkSession is defined in Models.swift alongside relationships to Car and ParkingSpot.
+// This file is intentionally left empty to avoid redeclaration errors.

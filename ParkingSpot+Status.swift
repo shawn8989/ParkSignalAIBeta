@@ -1,3 +1,6 @@
+// DEPRECATED: This file duplicated ParkingSpot status helpers and is no longer used.
+// It is excluded from the build. You can safely delete this file.
+#if false
 import Foundation
 import SwiftUI
 
@@ -18,30 +21,6 @@ extension ParkingSpot {
             if now >= start && now <= end { return true }
         }
         return false
-    }
-
-    /// Next future restriction start date from now, if any, considering daysOfWeek and start times.
-    func nextRestrictionDate(from now: Date = Date()) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        for r in restrictions {
-            if r.daysOfWeek.isEmpty { continue }
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard r.daysOfWeek.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
-            }
-        }
-        return best
     }
 
     /// A simple status color for map pins:
@@ -65,3 +44,4 @@ extension ParkingSpot {
         return cal.date(from: comps) ?? date
     }
 }
+#endif

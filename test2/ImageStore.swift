@@ -13,6 +13,16 @@ enum ImageStore {
         return filename
     }
 
+    static func loadImage(named filename: String) -> UIImage? {
+        let path = url(for: filename).path
+        return UIImage(contentsOfFile: path)
+    }
+
+    static func deleteImage(named filename: String) {
+        let fileURL = url(for: filename)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
     static func url(for filename: String) -> URL {
         documentsURL().appendingPathComponent(filename)
     }

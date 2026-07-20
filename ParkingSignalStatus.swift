@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CoreLocation
 
 // Unified color-coded parking signal states used across the app
 enum ParkingSignalStatus: String, CaseIterable, Codable, Equatable {
@@ -49,6 +50,61 @@ extension ParkingSignalStatus {
 // MARK: - Evaluation Engine
 
 struct ParkingSignalEvaluator {
+    // MARK: - Segment-aware evaluation helpers
+
+    /// Determine if a user's current location and side fall within a scan's assigned segment.
+    private static func scanAppliesToUserSegment(_ scan: SignScan, userLocation: CLLocationCoordinate2D, userStreetSide: String?, defaultRadius: Double = 15.0) -> Bool {
+        let center = CLLocationCoordinate2D(latitude: scan.segmentCenterLat ?? scan.latitude, longitude: scan.segmentCenterLon ?? scan.longitude)
+        let radius = scan.segmentRadius ?? defaultRadius
+        let scanSide = (scan.segmentStreetSide ?? scan.spot?.streetSide ?? "").lowercased()
+        let userSide = (userStreetSide ?? "").lowercased()
+        // Side must match when known
+        if !scanSide.isEmpty && !userSide.isEmpty && scanSide != userSide { return false }
+        // Distance check
+        let d = haversineMeters(center, userLocation)
+        return d <= radius
+    }
+
+    /// Haversine distance between two coordinates in meters.
+    private static func haversineMeters(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        let R = 6_371_000.0
+        let lat1 = a.latitude * .pi / 180
+        let lon1 = a.longitude * .pi / 180
+        let lat2 = b.latitude * .pi / 180
+        let lon2 = b.longitude * .pi / 180
+        let dlat = lat2 - lat1
+        let dlon = lon2 - lon1
+        let aa = sin(dlat/2) * sin(dlat/2) + cos(lat1) * cos(lat2) * sin(dlon/2) * sin(dlon/2)
+        let c = 2 * atan2(sqrt(aa), sqrt(1-aa))
+        return R * c
+    }
+
+    /// Resolve side string from heading and a spot's/scan's side. If no heading-based inference is available, return existing value.
+    private static func resolveUserSideString(_ side: StreetSide?) -> String? {
+        return side?.rawValue
+    }
+
+    /// Segment-aware status for a specific user location, considering only scans in the same curb segment.
+    static func statusForUserLocation(_ userLocation: CLLocationCoordinate2D, userSide: StreetSide?, scans: [SignScan], now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
+        let sideString = resolveUserSideString(userSide)
+        // Filter scans that apply to this segment
+        let applicable = scans.filter { scan in
+            scanAppliesToUserSegment(scan, userLocation: userLocation, userStreetSide: sideString)
+        }
+        guard !applicable.isEmpty else { return .gray }
+        // Collect restrictions from applicable scans (prefer scan-attached restrictions)
+        var restrictions: [Restriction] = []
+        for s in applicable {
+            restrictions.append(contentsOf: s.restrictions)
+            // If scan has no restrictions but is attached to a spot, include spot restrictions as fallback
+            if s.restrictions.isEmpty, let sp = s.spot {
+                restrictions.append(contentsOf: sp.restrictions)
+            }
+        }
+        if restrictions.isEmpty { return .gray }
+        return status(for: restrictions, now: now, leadMinutes: leadMinutes)
+    }
+
     // Priority: red > yellow > blue > purple > green > gray
     // leadMinutes controls the threshold for "soon" (yellow)
 
@@ -105,11 +161,50 @@ struct ParkingSignalEvaluator {
     }
 
     static func status(for scan: SignScan, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
+        // Prefer evaluating from parsed restrictions attached to the scan
+        if scan.status == "complete", !scan.restrictions.isEmpty {
+            return status(for: scan.restrictions, now: now, leadMinutes: leadMinutes)
+        }
+        // If the scan is attached to a spot, fall back to spot evaluation
         if let spot = scan.spot { return status(for: spot, now: now, leadMinutes: leadMinutes) }
-        // If the scan isn't attached to a spot or is incomplete, treat as unknown
-        if scan.status != "complete" { return .gray }
-        // Without attached restrictions, we cannot reliably compute; remain gray
+        // Without attached restrictions and not complete, treat as unknown
         return .gray
+    }
+
+    static func status(for restrictions: [Restriction], now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
+        let cal = Calendar.current
+        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
+
+        func isActive(_ r: Restriction) -> Bool {
+            if !r.daysOfWeek.isEmpty && !r.daysOfWeek.contains(weekday0_6) { return false }
+            let sh = cal.component(.hour, from: r.startTime)
+            let sm = cal.component(.minute, from: r.startTime)
+            let eh = cal.component(.hour, from: r.endTime)
+            let em = cal.component(.minute, from: r.endTime)
+            var start = todayAt(hour: sh, minute: sm, ref: now)
+            var end = todayAt(hour: eh, minute: em, ref: now)
+            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
+            return (now >= start && now <= end)
+        }
+
+        // RED: any illegal restriction active now
+        if restrictions.contains(where: { r in (r.type == .noParking || r.type == .streetCleaning) && isActive(r) }) {
+            return .red
+        }
+        // BLUE: permit/ADA required active now
+        if restrictions.contains(where: { r in r.type == .permit && isActive(r) }) { return .blue }
+        // PURPLE: metered active now
+        if restrictions.contains(where: { r in r.type == .metered && isActive(r) }) { return .purple }
+
+        // YELLOW: next illegal start within leadMinutes
+        if let next = nextIllegalStart(from: restrictions, now: now) {
+            if next.timeIntervalSince(now) <= TimeInterval(max(0, leadMinutes)) * 60 {
+                return .yellow
+            }
+        }
+
+        if restrictions.isEmpty { return .gray }
+        return .green
     }
 
     // Evaluate from an AIAnalysisResponse (pre‑save preview)
@@ -212,9 +307,34 @@ struct ParkingSignalEvaluator {
         return best
     }
 
+    private static func nextIllegalStart(from restrictions: [Restriction], now: Date) -> Date? {
+        let cal = Calendar.current
+        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
+        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
+        var best: Date? = nil
+        for r in restrictions where (r.type == .noParking || r.type == .streetCleaning) {
+            let days = r.daysOfWeek
+            if days.isEmpty { continue }
+            let (h, m) = hourMinute(r.startTime)
+            for offset in 0...13 {
+                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
+                let w = weekdayIndex0_6(day)
+                guard days.contains(w) else { continue }
+                var comps = cal.dateComponents([.year, .month, .day], from: day)
+                comps.hour = h; comps.minute = m; comps.second = 0
+                guard let candidate = cal.date(from: comps) else { continue }
+                if candidate <= now { continue }
+                if best == nil || candidate < best! { best = candidate }
+                break
+            }
+        }
+        return best
+    }
+
     private static func todayAt(hour: Int, minute: Int, ref: Date) -> Date {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: ref)
         comps.hour = hour; comps.minute = minute; comps.second = 0
         return Calendar.current.date(from: comps) ?? ref
     }
 }
+

@@ -1,10 +1,10 @@
 import Foundation
-import SwiftUI
-import SwiftData
+import Combine
 
-@Observable
+@MainActor
 final class AuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
+    @Published var isGuest = false
     @Published var currentUser: User?
     @Published var errorMessage: String?
     
@@ -25,6 +25,7 @@ final class AuthViewModel: ObservableObject {
     }
     
     func login(email: String, password: String) {
+        isGuest = false
         guard let user = users.first(where: { $0.email == email && $0.passwordHash == password.sha256 }) else {
             errorMessage = "Invalid credentials."
             return
@@ -37,5 +38,17 @@ final class AuthViewModel: ObservableObject {
     func logout() {
         currentUser = nil
         isAuthenticated = false
+        isGuest = false
+    }
+    
+    func continueAsGuest() {
+        currentUser = nil
+        isAuthenticated = false
+        isGuest = true
+        errorMessage = nil
+    }
+    
+    func exitGuest() {
+        isGuest = false
     }
 }

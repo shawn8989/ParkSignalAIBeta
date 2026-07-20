@@ -2,7 +2,7 @@ import Foundation
 import CoreLocation
 import Combine
 
-final class LocationManager: NSObject, ObservableObject {
+final class LocationManagerLite: NSObject, ObservableObject {
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
@@ -24,7 +24,7 @@ final class LocationManager: NSObject, ObservableObject {
     }
 }
 
-extension LocationManager: CLLocationManagerDelegate {
+extension LocationManagerLite: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
         if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {

@@ -12,9 +12,10 @@ enum AIRestrictionType: String, Codable {
 struct AIRestriction: Codable {
     let type: AIRestrictionType
     let daysOfWeek: [Int]          // Sunday = 0 ... Saturday = 6
-    let startTime: String          // "HH:mm" 24h local
-    let endTime: String            // "HH:mm" 24h local
+    let startTime: String          // "HH:mm" 24h local (use "00:00" if not applicable)
+    let endTime: String            // "HH:mm" 24h local (use "00:00" if not applicable)
     let notes: String?
+    let durationMinutes: Int?      // e.g., 180 for "3 HOUR PARKING"; nil if not a time limit
 }
 
 struct AIAnalysisResponse: Codable {

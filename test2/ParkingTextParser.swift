@@ -12,31 +12,63 @@ struct ParkingTextParser {
             .filter { !$0.isEmpty }
 
         for line in lines {
-            guard let type = detectType(in: line) else { continue }
-            let days = extractDays(from: line)
-            guard let times = extractTimeRange(from: line) else { continue }
-            let r = AIRestriction(
-                type: type,
-                daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
-                startTime: times.start,
-                endTime: times.end,
-                notes: line
-            )
-            results.append(r)
+            // Try explicit window first
+            if let times = extractTimeRange(from: line), let type = detectType(in: line) ?? (line.lowercased().contains("hour") ? .metered : nil) {
+                let days = extractDays(from: line)
+                let r = AIRestriction(
+                    type: type,
+                    daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
+                    startTime: times.start,
+                    endTime: times.end,
+                    notes: line,
+                    durationMinutes: nil
+                )
+                results.append(r)
+                continue
+            }
+
+            // Try duration pattern like "3 HOUR PARKING", "2 HOURS", "90 MINUTES"
+            if let duration = extractDuration(from: line) {
+                let type: AIRestrictionType = detectType(in: line) ?? .metered
+                let days = extractDays(from: line)
+                let r = AIRestriction(
+                    type: type,
+                    daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
+                    startTime: "00:00",
+                    endTime: "00:00",
+                    notes: line,
+                    durationMinutes: duration
+                )
+                results.append(r)
+                continue
+            }
         }
 
         // Fallback: try whole text once
-        if results.isEmpty, let times = extractTimeRange(from: ocrText) {
+        if results.isEmpty {
             let type = detectType(in: ocrText) ?? .other
             let days = extractDays(from: ocrText)
-            let r = AIRestriction(
-                type: type,
-                daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
-                startTime: times.start,
-                endTime: times.end,
-                notes: nil
-            )
-            results.append(r)
+            if let times = extractTimeRange(from: ocrText) {
+                let r = AIRestriction(
+                    type: type,
+                    daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
+                    startTime: times.start,
+                    endTime: times.end,
+                    notes: nil,
+                    durationMinutes: nil
+                )
+                results.append(r)
+            } else if let dur = extractDuration(from: ocrText) {
+                let r = AIRestriction(
+                    type: type == .other ? .metered : type,
+                    daysOfWeek: days.isEmpty ? defaultDays(for: type) : days,
+                    startTime: "00:00",
+                    endTime: "00:00",
+                    notes: nil,
+                    durationMinutes: dur
+                )
+                results.append(r)
+            }
         }
 
         return AIAnalysisResponse(restrictions: results)
@@ -156,5 +188,25 @@ struct ParkingTextParser {
             // Reasonable default when days not specified
             return Array(0...6)
         }
+    }
+
+    private func extractDuration(from s: String) -> Int? {
+        let l = s.lowercased()
+        // Matches "3 hour", "3 hr", "3hrs", "90 min", "90 minutes"
+        let patterns = [
+            #"(\d{1,3})\s*(hour|hr|hrs|hours)"#,
+            #"(\d{1,3})\s*(min|mins|minute|minutes)"#
+        ]
+        for p in patterns {
+            if let regex = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
+                if let m = regex.firstMatch(in: l, range: NSRange(l.startIndex..., in: l)),
+                   let r = Range(m.range(at: 1), in: l),
+                   let n = Int(l[r]) {
+                    if p.contains("hour") || p.contains("hr") { return n * 60 }
+                    return n
+                }
+            }
+        }
+        return nil
     }
 }

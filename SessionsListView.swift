@@ -3,7 +3,7 @@ import SwiftData
 
 struct SessionsListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ParkSession.startedAt, order: .reverse) private var sessions: [ParkSession]
+    @Query(sort: [SortDescriptor<ParkSession>(\.startedAt, order: .reverse)]) private var sessions: [ParkSession]
     @State private var showingNew = false
     @State private var newSession = ParkSession()
 
@@ -61,8 +61,8 @@ private struct SessionRow: View {
                         .foregroundStyle(.green)
                 }
             }
-            if let duration = session.duration {
-                Text(Self.durationFormatter.string(from: duration) ?? "")
+            if let ended = session.endedAt {
+                Text(Self.durationFormatter.string(from: ended.timeIntervalSince(session.startedAt)) ?? "")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -78,14 +78,6 @@ private struct SessionRow: View {
 }
 
 #Preview {
-    let container = try! ModelContainer(for: ParkSession.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-    let context = container.mainContext
-    let s1 = ParkSession(startedAt: .now.addingTimeInterval(-3600), endedAt: .now)
-    let s2 = ParkSession(startedAt: .now.addingTimeInterval(-7200), endedAt: .now.addingTimeInterval(-1800))
-    let s3 = ParkSession(startedAt: .now.addingTimeInterval(-300))
-    context.insert(s1)
-    context.insert(s2)
-    context.insert(s3)
-    return SessionsListView()
-        .modelContainer(container)
+    SessionsListView()
+        .modelContainer(for: [User.self, Car.self, ParkingSpot.self, Restriction.self, CurrentParking.self, ParkSession.self, SignScan.self], inMemory: true)
 }

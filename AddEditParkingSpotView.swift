@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct AddEditParkingSpotView: View {
     @Binding var spot: ParkingSpot
+    var isNew: Bool
     var onSave: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     
@@ -14,7 +16,7 @@ struct AddEditParkingSpotView: View {
                     TextField("e.g. 123 Main St", text: $location)
                 }
             }
-            .navigationTitle(spot.id == UUID() ? "Add Spot" : "Edit Spot")
+            .navigationTitle(isNew ? "Add Spot" : "Edit Spot")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {

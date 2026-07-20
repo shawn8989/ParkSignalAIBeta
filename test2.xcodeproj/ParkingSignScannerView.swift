@@ -71,7 +71,8 @@ struct ParkingSignScannerView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return "No text yet…" }
         let firstLine = trimmed.split(separator: "\n").first.map(String.init) ?? trimmed
-        return firstLine.prefix(60) + (firstLine.count > 60 ? "…" : "")
+        let snippet = String(firstLine.prefix(60))
+        return snippet + (firstLine.count > 60 ? "…" : "")
     }
 }
 
@@ -85,7 +86,7 @@ private struct DataScannerContainer: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let controller = DataScannerViewController(
-            recognizedDataTypes: [.text()],
+            recognizedDataTypes: [DataScannerViewController.RecognizedDataType.text()],
             qualityLevel: .balanced,
             recognizesMultipleItems: true,
             isHighFrameRateTrackingEnabled: false,
@@ -117,19 +118,19 @@ private struct DataScannerContainer: UIViewControllerRepresentable {
             _latestText = latestText
         }
 
-        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [DataScannerViewController.RecognizedItem], allItems: [DataScannerViewController.RecognizedItem]) {
             updateText(from: allItems)
         }
 
-        func dataScanner(_ dataScanner: DataScannerViewController, didUpdate updatedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+        func dataScanner(_ dataScanner: DataScannerViewController, didUpdate updatedItems: [DataScannerViewController.RecognizedItem], allItems: [DataScannerViewController.RecognizedItem]) {
             updateText(from: allItems)
         }
 
-        func dataScanner(_ dataScanner: DataScannerViewController, didRemove removedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+        func dataScanner(_ dataScanner: DataScannerViewController, didRemove removedItems: [DataScannerViewController.RecognizedItem], allItems: [DataScannerViewController.RecognizedItem]) {
             updateText(from: allItems)
         }
 
-        private func updateText(from items: [RecognizedItem]) {
+        private func updateText(from items: [DataScannerViewController.RecognizedItem]) {
             var texts: [String] = []
             for item in items {
                 if case let .text(obs) = item {

@@ -10,14 +10,26 @@ struct AnalysisConfirmationView: View {
     let ocrText: String
     let photoFilename: String?
     let analysis: AIAnalysisResponse
-    var onFinished: (() -> Void)? = nil
+    var onFinished: (([Restriction]) -> Void)? = nil
 
     @State private var includeFlags: [Bool] = []
     @State private var cannotParkNow: Bool = false
+    @State private var setAsCurrentParking: Bool = true
+    @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
     var body: some View {
         NavigationStack {
             List {
+                let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
+                HStack(spacing: 10) {
+                    Image(systemName: status.iconName).foregroundStyle(status.color)
+                    Text(status.label).font(.subheadline)
+                    Spacer()
+                }
+                .padding(8)
+                .background(status.color.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
                 if cannotParkNow {
                     HStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -31,7 +43,7 @@ struct AnalysisConfirmationView: View {
                 Section(header: Text("Detected Restrictions")) {
                     ForEach(analysis.restrictions.indices, id: \.self) { idx in
                         let r = analysis.restrictions[idx]
-                        Toggle(isOn: $includeFlags[idx]) {
+                        Toggle(isOn: bindingForIncludeFlag(idx)) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(title(for: r.type))
                                     .font(.headline)
@@ -44,6 +56,17 @@ struct AnalysisConfirmationView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+                        }
+                    }
+                }
+
+                Section {
+                    Toggle(isOn: $setAsCurrentParking) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Set as current parking location")
+                            Text("Only schedule alerts and timers for where your car is currently parked. You can change this later by scanning at a different spot.")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -64,22 +87,87 @@ struct AnalysisConfirmationView: View {
                 includeFlags = Array(repeating: true, count: analysis.restrictions.count)
                 cannotParkNow = computeCannotParkNow()
             }
+            .onChange(of: analysis.restrictions.count) { newCount in
+                includeFlags = Array(repeating: true, count: newCount)
+            }
+        }
+    }
+    
+    private func bindingForIncludeFlag(_ idx: Int) -> Binding<Bool> {
+        Binding(
+            get: {
+                if idx < includeFlags.count { return includeFlags[idx] }
+                return true
+            },
+            set: { newValue in
+                if idx < includeFlags.count {
+                    includeFlags[idx] = newValue
+                } else {
+                    if includeFlags.count < idx {
+                        includeFlags.append(contentsOf: Array(repeating: true, count: idx - includeFlags.count))
+                    }
+                    includeFlags.append(newValue)
+                }
+            }
+        )
+    }
+
+    private func setCurrentParking(to spot: ParkingSpot) {
+        do {
+            // Update or insert CurrentParking
+            let currentFetch = FetchDescriptor<CurrentParking>()
+            let existingCurrent = try context.fetch(currentFetch)
+            if let first = existingCurrent.first {
+                first.spot = spot
+                first.parkedAt = Date()
+            } else {
+                let current = CurrentParking(spot: spot, parkedAt: Date())
+                context.insert(current)
+            }
+
+            // End any open ParkSession (no endedAt)
+            if #available(iOS 17.0, *) {
+                let openFetch = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
+                let openSessions = try context.fetch(openFetch)
+                for s in openSessions { s.endedAt = Date() }
+            } else {
+                // Fallback: fetch all and end those without endedAt
+                let all = try context.fetch(FetchDescriptor<ParkSession>())
+                for s in all where s.endedAt == nil { s.endedAt = Date() }
+            }
+
+            // Start a new ParkSession for this spot
+            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil)
+            context.insert(session)
+
+            try context.save()
+        } catch {
+            // Non-fatal: tracking failed
+            print("Failed to set current parking / session: \(error)")
         }
     }
 
     private func saveAndSchedule() async {
         // Create Restriction models for included items
         var created: [Restriction] = []
-        for (idx, include) in includeFlags.enumerated() where include {
-            let r = analysis.restrictions[idx]
+        for (idx, r) in analysis.restrictions.enumerated() {
+            guard idx < includeFlags.count, includeFlags[idx] else { continue }
             guard let mappedType = mapType(r.type) else { continue }
 
-            // Parse HH:mm
-            guard let start = parseHHmm(r.startTime), let end = parseHHmm(r.endTime) else { continue }
-            let startDate = todayAt(hour: start.hour, minute: start.minute)
-            var endDate = todayAt(hour: end.hour, minute: end.minute)
-            if endDate <= startDate {
-                endDate = endDate.addingTimeInterval(24 * 60 * 60) // overnight
+            var startDate: Date
+            var endDate: Date
+            if let dur = r.durationMinutes, dur > 0 {
+                // Interpret as a time-limited parking window starting now
+                startDate = Date()
+                endDate = Date().addingTimeInterval(TimeInterval(dur * 60))
+            } else {
+                // Parse HH:mm
+                guard let start = DateTimeUtils.parseHHmm(r.startTime), let end = DateTimeUtils.parseHHmm(r.endTime) else { continue }
+                startDate = DateTimeUtils.todayAt(hour: start.hour, minute: start.minute)
+                endDate = DateTimeUtils.todayAt(hour: end.hour, minute: end.minute)
+                if endDate <= startDate {
+                    endDate = endDate.addingTimeInterval(24 * 60 * 60) // overnight
+                }
             }
 
             let restriction = Restriction(
@@ -103,9 +191,30 @@ struct AnalysisConfirmationView: View {
             // Best-effort; still try scheduling
         }
 
-        await NotificationManager.shared.schedule(for: created, spot: spot)
-        onFinished?()
-        dismiss()
+        if setAsCurrentParking {
+            // Mark this as the current parking location
+            setCurrentParking(to: spot)
+
+            await NotificationManager.shared.schedule(for: created, spot: spot)
+
+            // Schedule AlarmKit countdowns for duration-based restrictions (one-time timers)
+            for r in created {
+                if let ocr = r.ocrText, ocr.lowercased().contains("hour") || ocr.lowercased().contains("minute") {
+                    let seconds = max(60.0, r.endTime.timeIntervalSince(r.startTime))
+                    Task {
+                        _ = await AlarmService.shared.requestAuthorization()
+                        do { let _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("\(r.type.displayName)")) } catch { }
+                    }
+                }
+            }
+
+            onFinished?(created)
+            dismiss()
+        } else {
+            // Do not schedule alerts or timers; just save the data
+            onFinished?(created)
+            dismiss()
+        }
     }
 
     private func title(for type: AIRestrictionType) -> String {
@@ -134,22 +243,6 @@ struct AnalysisConfirmationView: View {
         return labels.isEmpty ? "None" : labels.joined(separator: ", ")
     }
 
-    private func parseHHmm(_ s: String) -> (hour: Int, minute: Int)? {
-        let parts = s.split(separator: ":")
-        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]), (0..<24).contains(h), (0..<60).contains(m) else {
-            return nil
-        }
-        return (h, m)
-    }
-
-    private func todayAt(hour: Int, minute: Int) -> Date {
-        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        comps.hour = hour
-        comps.minute = minute
-        comps.second = 0
-        return Calendar.current.date(from: comps) ?? Date()
-    }
-
     // "Common sense" check: if now is inside a forbidden window for today for types that matter
     private func computeCannotParkNow() -> Bool {
         let now = Date()
@@ -159,9 +252,9 @@ struct AnalysisConfirmationView: View {
         for r in analysis.restrictions {
             guard r.type == .street_cleaning || r.type == .no_parking else { continue }
             guard r.daysOfWeek.contains(weekday0_6) else { continue }
-            guard let s = parseHHmm(r.startTime), let e = parseHHmm(r.endTime) else { continue }
-            let start = todayAt(hour: s.hour, minute: s.minute)
-            var end = todayAt(hour: e.hour, minute: e.minute)
+            guard let s = DateTimeUtils.parseHHmm(r.startTime), let e = DateTimeUtils.parseHHmm(r.endTime) else { continue }
+            let start = DateTimeUtils.todayAt(hour: s.hour, minute: s.minute)
+            var end = DateTimeUtils.todayAt(hour: e.hour, minute: e.minute)
             if end <= start { end = end.addingTimeInterval(24*60*60) }
             if now >= start && now <= end { return true }
         }

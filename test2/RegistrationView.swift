@@ -17,9 +17,10 @@ struct RegistrationView: View {
                         .keyboardType(.emailAddress)
                     SecureField("Password", text: $password)
                 }
-                if let error = auth.errorMessage {
+                // Avoid if-let inside builders on older toolchains
+                if auth.errorMessage != nil {
                     Section {
-                        Text(error)
+                        Text(auth.errorMessage!)
                             .foregroundColor(.red)
                     }
                 }

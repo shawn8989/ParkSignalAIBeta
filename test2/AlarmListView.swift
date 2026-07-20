@@ -14,23 +14,46 @@ struct AlarmListView: View {
                         .foregroundColor(.secondary)
                 } else {
                     ForEach(alarms) { alarm in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(alarm.title)
-                                    .font(.headline)
-                                Text(timerInterval: alarm.endDate.timeIntervalSinceNow, countsDown: true)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: alarm.source == .alarmKit ? "alarm" : "bell")
+                                        .foregroundStyle(alarm.source == .alarmKit ? .orange : .blue)
+                                    Text(alarm.title)
+                                        .font(.headline)
+                                }
+                                HStack(spacing: 6) {
+                                    Text(timerInterval: Date.now...max(Date.now, alarm.endDate), countsDown: true)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    if let carID = alarm.carID, let car = carName(for: carID) {
+                                        Text("•")
+                                        Text(car)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                             }
                             Spacer()
-                            Button(role: .destructive) {
-                                Task {
-                                    await alarmService.cancel(id: alarm.id)
-                                    await refresh()
+                            Toggle(isOn: Binding(get: {
+                                // On if in list; turning off cancels
+                                true
+                            }, set: { on in
+                                if !on {
+                                    Task { await cancel(alarm) }
                                 }
-                            } label: {
-                                Image(systemName: "trash")
+                            })) {
+                                EmptyView()
                             }
+                            .labelsHidden()
+                        }
+                    }
+                    .onDelete { indexSet in
+                        Task {
+                            for index in indexSet {
+                                await alarmService.cancel(id: alarms[index].id)
+                            }
+                            await refresh()
                         }
                     }
                 }
@@ -48,6 +71,14 @@ struct AlarmListView: View {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 }
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Cancel All", role: .destructive) {
+                        Task {
+                            await alarmService.cancelAll()
+                            await refresh()
+                        }
+                    }
+                }
             }
             .task { await refresh() }
         }
@@ -56,5 +87,23 @@ struct AlarmListView: View {
     @MainActor
     private func refresh() async {
         alarms = await alarmService.allAlarms()
+    }
+
+    private func carName(for id: UUID) -> String? {
+        // Best-effort lookup from UserDefaults or a cache; if you have SwiftData context here, you could query Cars.
+        // For now, return nil.
+        return nil
+    }
+
+    private func cancel(_ alarm: AlarmService.SimpleAlarm) async {
+        switch alarm.source {
+        case .alarmKit:
+            await alarmService.cancel(id: alarm.id)
+        case .notification:
+            if let ident = alarm.notificationIdentifier {
+                await alarmService.cancelNotification(identifier: ident)
+            }
+        }
+        await refresh()
     }
 }

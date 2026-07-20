@@ -1,9 +1,8 @@
 import SwiftUI
 
-struct HomeView: View {
+struct LegacyHomeView: View {
     @State private var showQuickScanResult = false
     @State private var quickScanResultText = ""
-    @State private var showLiveScanner = false
     
     var body: some View {
         NavigationView {
@@ -20,13 +19,6 @@ struct HomeView: View {
                         }) {
                             Label("Sign Capture (Photo-based)", systemImage: "text.viewfinder")
                         }
-                        
-                        Button(action: {
-                            // Live Parking Sign Scanner action
-                            showLiveScanner = true
-                        }) {
-                            Label("ParkSignal Live", systemImage: "camera.viewfinder")
-                        }
                     } label: {
                         Label("Scan", systemImage: "scanner")
                     }
@@ -34,9 +26,6 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showQuickScanResult) {
                 QuickTextResultView(text: quickScanResultText)
-            }
-            .sheet(isPresented: $showLiveScanner) {
-                LiveScannerView()
             }
         }
     }
@@ -55,12 +44,6 @@ struct HomeView: View {
                     .padding()
             }
             .navigationTitle("ParkSignal Live")
-        }
-    }
-    
-    private struct LiveScannerView: View {
-        var body: some View {
-            Text("Live scanner interface")
         }
     }
 }

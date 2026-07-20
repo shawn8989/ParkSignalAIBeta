@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Foundation
 
 struct SpotEditView: View {
     @Environment(\.dismiss) private var dismiss
@@ -7,7 +8,7 @@ struct SpotEditView: View {
     @Bindable var spot: ParkingSpot
 
     @State private var locationText: String = ""
-    @State private var streetSide: String = "right"
+    @State private var orientation: String = "with"
 
     var body: some View {
         NavigationStack {
@@ -16,11 +17,10 @@ struct SpotEditView: View {
                     TextField("Location label", text: $locationText)
                         .textInputAutocapitalization(.words)
                 }
-                Section(header: Text("Street Side")) {
-                    Picker("Street Side", selection: $streetSide) {
-                        Text("Left").tag("left")
-                        Text("Right").tag("right")
-                        Text("Unknown").tag("unknown")
+                Section(header: Text("Parking Orientation")) {
+                    Picker("Orientation", selection: $orientation) {
+                        Text("With Traffic").tag("with")
+                        Text("Against Traffic").tag("against")
                     }
                     .pickerStyle(.segmented)
                 }
@@ -40,20 +40,23 @@ struct SpotEditView: View {
 
     private func load() {
         locationText = spot.location
-        streetSide = spot.streetSide
+        orientation = DrivingSide.selection(from: spot.streetSide)
     }
 
     private func save() {
         spot.location = locationText.trimmingCharacters(in: .whitespacesAndNewlines)
-        spot.streetSide = streetSide
+        if orientation == "unknown" {
+            spot.streetSide = "unknown"
+        } else {
+            spot.streetSide = DrivingSide.storedSide(from: orientation)
+        }
         do { try context.save() } catch { }
         dismiss()
     }
 }
 
 #Preview {
-    let model = ModelContainer.preview
     let spot = ParkingSpot(location: "123 Main St", latitude: 0, longitude: 0, streetSide: "right")
     return SpotEditView(spot: spot)
-        .environment(\.modelContext, model.mainContext)
+        .modelContainer(for: [ParkingSpot.self], inMemory: true)
 }

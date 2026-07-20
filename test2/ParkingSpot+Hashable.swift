@@ -1,11 +1,5 @@
 import Foundation
 
-extension ParkingSpot: Hashable {
-    public static func == (lhs: ParkingSpot, rhs: ParkingSpot) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
+// Removed manual Hashable conformance for ParkingSpot.
+// SwiftData's @Model macro provides the necessary identity and observation semantics.
+// In SwiftUI, prefer `List(spots, id: \.id)` rather than making the model Hashable.

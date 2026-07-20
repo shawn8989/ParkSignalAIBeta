@@ -59,17 +59,42 @@ final class NotificationManager {
                 content.title = title(for: r)
                 content.body = "Starts at \(formatTime(r.startTime)) near \(spot.location)"
                 content.sound = .default
+                if #available(iOS 15.0, *) {
+                    content.interruptionLevel = .timeSensitive
+                }
 
                 let trigger = UNCalendarNotificationTrigger(dateMatching: dateComps, repeats: true)
                 let id = "restriction.\(r.id.uuidString).\(lead.weekday1_7)"
                 let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
                 do {
+                    NotificationLogStore.shared.appendScheduled(id: id, title: content.title, body: content.body, categoryIdentifier: content.categoryIdentifier.isEmpty ? nil : content.categoryIdentifier, scheduledFor: nil, userInfo: nil)
                     try await center.add(request)
                 } catch {
                     // Best-effort; ignore individual failures
                 }
             }
         }
+    }
+
+    /// Cancel any pending weekly notifications previously scheduled for the given restrictions at this spot.
+    /// Uses the same identifier scheme as `schedule(for:spot:)` ("restriction.<restrictionID>.<weekday1_7>").
+    /// We recompute the alert weekday using the same lead-time logic to derive exact identifiers to remove.
+    func cancel(for restrictions: [Restriction], spot: ParkingSpot) async {
+        let center = UNUserNotificationCenter.current()
+        // Build the exact identifiers we used when scheduling.
+        var ids: [String] = []
+        for r in restrictions {
+            let comps = Calendar.current.dateComponents([.hour, .minute], from: r.startTime)
+            let startHour = comps.hour ?? 0
+            let startMinute = comps.minute ?? 0
+            for dow in r.daysOfWeek {
+                let lead = computeLead(weekday0_6: dow, startHour: startHour, startMinute: startMinute, leadMinutes: leadMinutes)
+                let id = "restriction.\(r.id.uuidString).\(lead.weekday1_7)"
+                ids.append(id)
+            }
+        }
+        // Remove any matching pending requests. Best-effort; safe to call even if none exist.
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     private func title(for r: Restriction) -> String {
@@ -101,4 +126,27 @@ final class NotificationManager {
         let weekday1_7 = ((weekday + 1 - 1) % 7) + 1
         return (weekday1_7, hour, minute)
     }
+
+    // Schedules a one-off test notification in `seconds` seconds
+    func scheduleTestNotification(seconds: TimeInterval = 3) async {
+        let center = UNUserNotificationCenter.current()
+        let ok = await requestAuthorizationIfNeeded()
+        guard ok else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Test Parking Reminder"
+        content.body = "This is a test notification from Settings/Quick Scan."
+        content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        let request = UNNotificationRequest(identifier: "notification.test.oneoff", content: content, trigger: trigger)
+        do {
+            NotificationLogStore.shared.appendScheduled(id: request.identifier, title: content.title, body: content.body, categoryIdentifier: content.categoryIdentifier.isEmpty ? nil : content.categoryIdentifier, scheduledFor: Date().addingTimeInterval(seconds), userInfo: nil)
+            try await center.add(request)
+        } catch {
+            // ignore in test
+        }
+    }
 }
+
