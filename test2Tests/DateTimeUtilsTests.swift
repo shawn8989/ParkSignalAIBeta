@@ -1,6 +1,7 @@
 #if canImport(Testing)
 import Foundation
 import Testing
+@testable import ParkSignal_AI
 
 @Suite("DateTimeUtils tests")
 struct DateTimeUtilsTests {

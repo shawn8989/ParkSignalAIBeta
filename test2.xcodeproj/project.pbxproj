@@ -7,51 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		291320F62ECD30AE00CCA138 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291320F52ECD30AE00CCA138 /* AuthViewModel.swift */; };
-		291320F82ECD30B000CCA138 /* LandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291320F72ECD30B000CCA138 /* LandingView.swift */; };
-		291320FC2ECD30B700CCA138 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291320FB2ECD30B700CCA138 /* LoginView.swift */; };
-		291321002ECD30BE00CCA138 /* ParkingSpotDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291320FF2ECD30BE00CCA138 /* ParkingSpotDetailView.swift */; };
-		291321022ECD30C100CCA138 /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291321012ECD30C100CCA138 /* MapView.swift */; };
-		291321042ECD30C500CCA138 /* ParkMateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291321032ECD30C500CCA138 /* ParkMateApp.swift */; };
-		291321062ECD31AF00CCA138 /* AddEditParkingSpotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291321052ECD31AF00CCA138 /* AddEditParkingSpotView.swift */; };
-		291321082ECD31B300CCA138 /* AddEditRestrictionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291321072ECD31B300CCA138 /* AddEditRestrictionView.swift */; };
-		294648032ED6166E0090CDC8 /* DateTimeUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294648022ED6166E0090CDC8 /* DateTimeUtils.swift */; };
-		294648052ED6178A0090CDC8 /* ParkingSpot+Status 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294648042ED6178A0090CDC8 /* ParkingSpot+Status 2.swift */; };
-		294648072ED63DF90090CDC8 /* DateTimeUtilsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294648062ED63DF90090CDC8 /* DateTimeUtilsTests.swift */; };
-		294648092ED63DFE0090CDC8 /* ParkingSpotStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294648082ED63DFE0090CDC8 /* ParkingSpotStatusTests.swift */; };
-		299652102ED3EBE700F7E13D /* QuickScanReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2996520F2ED3EBE700F7E13D /* QuickScanReviewView.swift */; };
-		299652122ED3EEDC00F7E13D /* ParkingSignalStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299652112ED3EEDC00F7E13D /* ParkingSignalStatus.swift */; };
-		2996524C2ED425B200F7E13D /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2996524B2ED425B200F7E13D /* HomeView.swift */; };
-		2996524E2ED4272600F7E13D /* HomeView 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2996524D2ED4272600F7E13D /* HomeView 2.swift */; };
-		299652502ED43AF600F7E13D /* Segment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2996524F2ED43AF600F7E13D /* Segment.swift */; };
-		299652522ED4400600F7E13D /* StreetSide+Hashable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299652512ED4400600F7E13D /* StreetSide+Hashable.swift */; };
-		299652542ED4413900F7E13D /* CurbGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299652532ED4413900F7E13D /* CurbGeometry.swift */; };
-		299652582ED4C43C00F7E13D /* SegmentMapEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299652572ED4C43C00F7E13D /* SegmentMapEditorView.swift */; };
-		29A96F4B2ED4E84200696E7D /* DateUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A96F4A2ED4E84200696E7D /* DateUtils.swift */; };
-		29A96F4D2ED4E85400696E7D /* OCRTextUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A96F4C2ED4E85400696E7D /* OCRTextUtils.swift */; };
-		29B54BBB2ED2264700E0A40B /* ParkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BBA2ED2264700E0A40B /* ParkSession.swift */; };
-		29B54BBD2ED2264F00E0A40B /* SessionsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BBC2ED2264F00E0A40B /* SessionsListView.swift */; };
-		29B54BBF2ED22CA400E0A40B /* REMOVE_ME_ParkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BBE2ED22CA400E0A40B /* REMOVE_ME_ParkSession.swift */; };
-		29B54BC12ED23D5A00E0A40B /* ParkingSpot+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BC02ED23D5A00E0A40B /* ParkingSpot+Status.swift */; };
-		29B54BC32ED2449900E0A40B /* DrivingSide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BC22ED2449900E0A40B /* DrivingSide.swift */; };
-		29B54BC52ED24F0400E0A40B /* SpotPhotosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BC42ED24F0400E0A40B /* SpotPhotosView.swift */; };
-		29B54BC72ED2715300E0A40B /* CarDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BC62ED2715300E0A40B /* CarDetailView.swift */; };
-		29B54BCB2ED2BC2700E0A40B /* ParkingEligibilityEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BCA2ED2BC2700E0A40B /* ParkingEligibilityEvaluator.swift */; };
-		29B54BCD2ED37BBF00E0A40B /* NotificationLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BCC2ED37BBF00E0A40B /* NotificationLog.swift */; };
-		29B54BCF2ED37BC700E0A40B /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BCE2ED37BC700E0A40B /* NotificationsView.swift */; };
-		29B54BD12ED37BF000E0A40B /* NotificationLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BD02ED37BF000E0A40B /* NotificationLogStore.swift */; };
-		29B54BD32ED37C4B00E0A40B /* AlertsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BD22ED37C4B00E0A40B /* AlertsHubView.swift */; };
-		29B54BD52ED3824700E0A40B /* QuickSpotActionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BD42ED3824700E0A40B /* QuickSpotActionsSheet.swift */; };
-		29B54BD72ED3A5BE00E0A40B /* BackendSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29B54BD62ED3A5BE00E0A40B /* BackendSyncService.swift */; };
-		29E287F32ECD83F7004F8619 /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E287F22ECD83F7004F8619 /* RegisterView.swift */; };
-		29E288162ECEE9F4004F8619 /* ParkingSignScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E288152ECEE9F4004F8619 /* ParkingSignScannerView.swift */; };
-		29E2881E2ECEEA6D004F8619 /* QuickScanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E2881D2ECEEA6D004F8619 /* QuickScanSheet.swift */; };
-		29E2882E2ED175E4004F8619 /* SpotsMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E2882D2ED175E4004F8619 /* SpotsMapView.swift */; };
-		29E288302ED17671004F8619 /* CarListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E2882F2ED17671004F8619 /* CarListView.swift */; };
-		29E288322ED17E07004F8619 /* ScansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E288312ED17E07004F8619 /* ScansView.swift */; };
-		29E288342ED17E0C004F8619 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E288332ED17E0C004F8619 /* HistoryView.swift */; };
-		29E288362ED17E0E004F8619 /* SignScanEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E288352ED17E0E004F8619 /* SignScanEditView.swift */; };
-		29E288382ED17E10004F8619 /* ParkSessionEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E288372ED17E10004F8619 /* ParkSessionEditView.swift */; };
 		29E2883A2ED17E32004F8619 /* README_CHANGES.md in Resources */ = {isa = PBXBuildFile; fileRef = 29E288392ED17E32004F8619 /* README_CHANGES.md */; };
 /* End PBXBuildFile section */
 
@@ -73,52 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		291320F52ECD30AE00CCA138 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
-		291320F72ECD30B000CCA138 /* LandingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LandingView.swift; sourceTree = "<group>"; };
-		291320FB2ECD30B700CCA138 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		291320FF2ECD30BE00CCA138 /* ParkingSpotDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingSpotDetailView.swift; sourceTree = "<group>"; };
-		291321012ECD30C100CCA138 /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
-		291321032ECD30C500CCA138 /* ParkMateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkMateApp.swift; sourceTree = "<group>"; };
-		291321052ECD31AF00CCA138 /* AddEditParkingSpotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEditParkingSpotView.swift; sourceTree = "<group>"; };
-		291321072ECD31B300CCA138 /* AddEditRestrictionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEditRestrictionView.swift; sourceTree = "<group>"; };
-		294648022ED6166E0090CDC8 /* DateTimeUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateTimeUtils.swift; sourceTree = "<group>"; };
-		294648042ED6178A0090CDC8 /* ParkingSpot+Status 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ParkingSpot+Status 2.swift"; sourceTree = "<group>"; };
-		294648062ED63DF90090CDC8 /* DateTimeUtilsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateTimeUtilsTests.swift; sourceTree = "<group>"; };
-		294648082ED63DFE0090CDC8 /* ParkingSpotStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingSpotStatusTests.swift; sourceTree = "<group>"; };
-		2996520F2ED3EBE700F7E13D /* QuickScanReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickScanReviewView.swift; sourceTree = "<group>"; };
-		299652112ED3EEDC00F7E13D /* ParkingSignalStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingSignalStatus.swift; sourceTree = "<group>"; };
-		2996524B2ED425B200F7E13D /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		2996524D2ED4272600F7E13D /* HomeView 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeView 2.swift"; sourceTree = "<group>"; };
-		2996524F2ED43AF600F7E13D /* Segment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Segment.swift; sourceTree = "<group>"; };
-		299652512ED4400600F7E13D /* StreetSide+Hashable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StreetSide+Hashable.swift"; sourceTree = "<group>"; };
-		299652532ED4413900F7E13D /* CurbGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurbGeometry.swift; sourceTree = "<group>"; };
-		299652572ED4C43C00F7E13D /* SegmentMapEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentMapEditorView.swift; sourceTree = "<group>"; };
-		29A96F4A2ED4E84200696E7D /* DateUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateUtils.swift; sourceTree = "<group>"; };
-		29A96F4C2ED4E85400696E7D /* OCRTextUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRTextUtils.swift; sourceTree = "<group>"; };
-		29B54BBA2ED2264700E0A40B /* ParkSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkSession.swift; sourceTree = "<group>"; };
-		29B54BBC2ED2264F00E0A40B /* SessionsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsListView.swift; sourceTree = "<group>"; };
-		29B54BBE2ED22CA400E0A40B /* REMOVE_ME_ParkSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = REMOVE_ME_ParkSession.swift; sourceTree = "<group>"; };
-		29B54BC02ED23D5A00E0A40B /* ParkingSpot+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ParkingSpot+Status.swift"; sourceTree = "<group>"; };
-		29B54BC22ED2449900E0A40B /* DrivingSide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingSide.swift; sourceTree = "<group>"; };
-		29B54BC42ED24F0400E0A40B /* SpotPhotosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotPhotosView.swift; sourceTree = "<group>"; };
-		29B54BC62ED2715300E0A40B /* CarDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarDetailView.swift; sourceTree = "<group>"; };
-		29B54BCA2ED2BC2700E0A40B /* ParkingEligibilityEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingEligibilityEvaluator.swift; sourceTree = "<group>"; };
-		29B54BCC2ED37BBF00E0A40B /* NotificationLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationLog.swift; sourceTree = "<group>"; };
-		29B54BCE2ED37BC700E0A40B /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
-		29B54BD02ED37BF000E0A40B /* NotificationLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationLogStore.swift; sourceTree = "<group>"; };
-		29B54BD22ED37C4B00E0A40B /* AlertsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsHubView.swift; sourceTree = "<group>"; };
-		29B54BD42ED3824700E0A40B /* QuickSpotActionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickSpotActionsSheet.swift; sourceTree = "<group>"; };
-		29B54BD62ED3A5BE00E0A40B /* BackendSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendSyncService.swift; sourceTree = "<group>"; };
-		29E287F22ECD83F7004F8619 /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
 		29E288132ECEE45B004F8619 /* Secrets.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.Debug.xcconfig; sourceTree = "<group>"; };
-		29E288152ECEE9F4004F8619 /* ParkingSignScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingSignScannerView.swift; sourceTree = "<group>"; };
-		29E2881D2ECEEA6D004F8619 /* QuickScanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickScanSheet.swift; sourceTree = "<group>"; };
-		29E2882D2ED175E4004F8619 /* SpotsMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotsMapView.swift; sourceTree = "<group>"; };
-		29E2882F2ED17671004F8619 /* CarListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarListView.swift; sourceTree = "<group>"; };
-		29E288312ED17E07004F8619 /* ScansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScansView.swift; sourceTree = "<group>"; };
-		29E288332ED17E0C004F8619 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
-		29E288352ED17E0E004F8619 /* SignScanEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignScanEditView.swift; sourceTree = "<group>"; };
-		29E288372ED17E10004F8619 /* ParkSessionEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkSessionEditView.swift; sourceTree = "<group>"; };
 		29E288392ED17E32004F8619 /* README_CHANGES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README_CHANGES.md; sourceTree = "<group>"; };
 		29F5319C2ECD19B400475F48 /* ParkSignal AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ParkSignal AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F531A92ECD19B600475F48 /* test2Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = test2Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -189,52 +99,7 @@
 				29F531AC2ECD19B600475F48 /* test2Tests */,
 				29F531B62ECD19B600475F48 /* test2UITests */,
 				29F5319D2ECD19B400475F48 /* Products */,
-				291320F52ECD30AE00CCA138 /* AuthViewModel.swift */,
-				291320F72ECD30B000CCA138 /* LandingView.swift */,
-				291320FB2ECD30B700CCA138 /* LoginView.swift */,
-				29E287F22ECD83F7004F8619 /* RegisterView.swift */,
-				291320FF2ECD30BE00CCA138 /* ParkingSpotDetailView.swift */,
-				291321012ECD30C100CCA138 /* MapView.swift */,
-				291321032ECD30C500CCA138 /* ParkMateApp.swift */,
-				291321052ECD31AF00CCA138 /* AddEditParkingSpotView.swift */,
-				29E2881D2ECEEA6D004F8619 /* QuickScanSheet.swift */,
-				29E288152ECEE9F4004F8619 /* ParkingSignScannerView.swift */,
-				291321072ECD31B300CCA138 /* AddEditRestrictionView.swift */,
-				29E2882D2ED175E4004F8619 /* SpotsMapView.swift */,
-				29E2882F2ED17671004F8619 /* CarListView.swift */,
-				29E288312ED17E07004F8619 /* ScansView.swift */,
-				29E288332ED17E0C004F8619 /* HistoryView.swift */,
-				29E288352ED17E0E004F8619 /* SignScanEditView.swift */,
-				29E288372ED17E10004F8619 /* ParkSessionEditView.swift */,
 				29E288392ED17E32004F8619 /* README_CHANGES.md */,
-				29B54BBA2ED2264700E0A40B /* ParkSession.swift */,
-				29B54BBC2ED2264F00E0A40B /* SessionsListView.swift */,
-				29B54BBE2ED22CA400E0A40B /* REMOVE_ME_ParkSession.swift */,
-				29B54BC02ED23D5A00E0A40B /* ParkingSpot+Status.swift */,
-				29B54BC22ED2449900E0A40B /* DrivingSide.swift */,
-				29B54BC42ED24F0400E0A40B /* SpotPhotosView.swift */,
-				29B54BC62ED2715300E0A40B /* CarDetailView.swift */,
-				29B54BCA2ED2BC2700E0A40B /* ParkingEligibilityEvaluator.swift */,
-				29B54BCC2ED37BBF00E0A40B /* NotificationLog.swift */,
-				29B54BCE2ED37BC700E0A40B /* NotificationsView.swift */,
-				29B54BD02ED37BF000E0A40B /* NotificationLogStore.swift */,
-				29B54BD22ED37C4B00E0A40B /* AlertsHubView.swift */,
-				29B54BD42ED3824700E0A40B /* QuickSpotActionsSheet.swift */,
-				29B54BD62ED3A5BE00E0A40B /* BackendSyncService.swift */,
-				2996520F2ED3EBE700F7E13D /* QuickScanReviewView.swift */,
-				299652112ED3EEDC00F7E13D /* ParkingSignalStatus.swift */,
-				2996524B2ED425B200F7E13D /* HomeView.swift */,
-				2996524D2ED4272600F7E13D /* HomeView 2.swift */,
-				2996524F2ED43AF600F7E13D /* Segment.swift */,
-				299652512ED4400600F7E13D /* StreetSide+Hashable.swift */,
-				299652532ED4413900F7E13D /* CurbGeometry.swift */,
-				299652572ED4C43C00F7E13D /* SegmentMapEditorView.swift */,
-				29A96F4A2ED4E84200696E7D /* DateUtils.swift */,
-				29A96F4C2ED4E85400696E7D /* OCRTextUtils.swift */,
-				294648022ED6166E0090CDC8 /* DateTimeUtils.swift */,
-				294648042ED6178A0090CDC8 /* ParkingSpot+Status 2.swift */,
-				294648062ED63DF90090CDC8 /* DateTimeUtilsTests.swift */,
-				294648082ED63DFE0090CDC8 /* ParkingSpotStatusTests.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -393,51 +258,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				291320F62ECD30AE00CCA138 /* AuthViewModel.swift in Sources */,
-				291321002ECD30BE00CCA138 /* ParkingSpotDetailView.swift in Sources */,
-				29E288342ED17E0C004F8619 /* HistoryView.swift in Sources */,
-				29B54BCD2ED37BBF00E0A40B /* NotificationLog.swift in Sources */,
-				294648032ED6166E0090CDC8 /* DateTimeUtils.swift in Sources */,
-				294648052ED6178A0090CDC8 /* ParkingSpot+Status 2.swift in Sources */,
-				294648092ED63DFE0090CDC8 /* ParkingSpotStatusTests.swift in Sources */,
-				291321042ECD30C500CCA138 /* ParkMateApp.swift in Sources */,
-				29E288322ED17E07004F8619 /* ScansView.swift in Sources */,
-				29B54BCB2ED2BC2700E0A40B /* ParkingEligibilityEvaluator.swift in Sources */,
-				29E288382ED17E10004F8619 /* ParkSessionEditView.swift in Sources */,
-				291321082ECD31B300CCA138 /* AddEditRestrictionView.swift in Sources */,
-				29E288302ED17671004F8619 /* CarListView.swift in Sources */,
-				299652122ED3EEDC00F7E13D /* ParkingSignalStatus.swift in Sources */,
-				29B54BC72ED2715300E0A40B /* CarDetailView.swift in Sources */,
-				29E2881E2ECEEA6D004F8619 /* QuickScanSheet.swift in Sources */,
-				29E287F32ECD83F7004F8619 /* RegisterView.swift in Sources */,
-				299652522ED4400600F7E13D /* StreetSide+Hashable.swift in Sources */,
-				2996524C2ED425B200F7E13D /* HomeView.swift in Sources */,
-				299652502ED43AF600F7E13D /* Segment.swift in Sources */,
-				299652582ED4C43C00F7E13D /* SegmentMapEditorView.swift in Sources */,
-				2996524E2ED4272600F7E13D /* HomeView 2.swift in Sources */,
-				29E2882E2ED175E4004F8619 /* SpotsMapView.swift in Sources */,
-				29B54BBD2ED2264F00E0A40B /* SessionsListView.swift in Sources */,
-				29B54BBF2ED22CA400E0A40B /* REMOVE_ME_ParkSession.swift in Sources */,
-				29B54BD12ED37BF000E0A40B /* NotificationLogStore.swift in Sources */,
-				29B54BD72ED3A5BE00E0A40B /* BackendSyncService.swift in Sources */,
-				29B54BD32ED37C4B00E0A40B /* AlertsHubView.swift in Sources */,
-				29B54BC12ED23D5A00E0A40B /* ParkingSpot+Status.swift in Sources */,
-				294648072ED63DF90090CDC8 /* DateTimeUtilsTests.swift in Sources */,
-				29B54BC52ED24F0400E0A40B /* SpotPhotosView.swift in Sources */,
-				29A96F4D2ED4E85400696E7D /* OCRTextUtils.swift in Sources */,
-				29B54BBB2ED2264700E0A40B /* ParkSession.swift in Sources */,
-				29B54BCF2ED37BC700E0A40B /* NotificationsView.swift in Sources */,
-				29B54BC32ED2449900E0A40B /* DrivingSide.swift in Sources */,
-				299652542ED4413900F7E13D /* CurbGeometry.swift in Sources */,
-				29B54BD52ED3824700E0A40B /* QuickSpotActionsSheet.swift in Sources */,
-				291320FC2ECD30B700CCA138 /* LoginView.swift in Sources */,
-				29A96F4B2ED4E84200696E7D /* DateUtils.swift in Sources */,
-				291320F82ECD30B000CCA138 /* LandingView.swift in Sources */,
-				29E288362ED17E0E004F8619 /* SignScanEditView.swift in Sources */,
-				291321062ECD31AF00CCA138 /* AddEditParkingSpotView.swift in Sources */,
-				299652102ED3EBE700F7E13D /* QuickScanReviewView.swift in Sources */,
-				29E288162ECEE9F4004F8619 /* ParkingSignScannerView.swift in Sources */,
-				291321022ECD30C100CCA138 /* MapView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
