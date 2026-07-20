@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
+# Build artifacts
+build/
+DerivedData/
+
+# Nested scratch repo (has its own .git)
+ParkSignalAI/
