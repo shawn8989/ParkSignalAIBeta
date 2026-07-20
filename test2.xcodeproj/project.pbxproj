@@ -400,6 +400,9 @@
 				DEVELOPMENT_TEAM = EU6247328G;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ParkSignal;
+				INFOPLIST_KEY_NSCameraUsageDescription = "ParkSignal uses the camera to scan parking signs.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ParkSignal uses your location to save where you parked and label scanned signs with an address.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,6 +435,9 @@
 				DEVELOPMENT_TEAM = EU6247328G;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ParkSignal;
+				INFOPLIST_KEY_NSCameraUsageDescription = "ParkSignal uses the camera to scan parking signs.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ParkSignal uses your location to save where you parked and label scanned signs with an address.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

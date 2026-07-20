@@ -87,29 +87,38 @@ Architecture
 	•	Real-time signal engine
 
   📁 Project Structure
-  ParkSignalAI/
+  test2/                     (app target — will be renamed)
+│
+├── App/
+│   ├── ParkSignalApp.swift        (entry point, SwiftData container)
+│   └── RootTabView.swift          (Scan / Map / History / Settings tabs)
 │
 ├── Models/
-│   ├── SignScan.swift
-│   ├── Restriction.swift
-│   └── RestrictionType.swift
+│   ├── Models.swift               (ParkingSpot, Restriction, SignScan, ParkSession)
+│   └── AIAnalysisModels.swift     (AI parsing DTOs)
 │
 ├── Views/
-│   ├── ParkSignalLive/
-│   ├── SignCapture/
-│   ├── ScanHistory/
-│   └── Map/
+│   ├── Scan/                      (ScanView, verdict UI, confirmation, camera, live scanner)
+│   ├── Map/                       (MapTabView, SpotDetailView, SpotEditView)
+│   ├── History/                   (HistoryTabView)
+│   └── Settings/                  (SettingsView, AlarmListView)
 │
 ├── Services/
-│   ├── OCRService.swift
-│   ├── AIParsingService.swift
-│   ├── LocationManager.swift
-│   └── BackendSyncService.swift
+│   ├── VisionOCRService.swift     (on-device OCR)
+│   ├── ParkingTextParser.swift    (on-device sign parsing — works offline)
+│   ├── AIAnalyzerService.swift    (optional OpenAI refinement)
+│   ├── NotificationManager.swift  (restriction reminders)
+│   ├── GeocodingService.swift · LocationManager.swift
+│   ├── ImageStore.swift · AlarmService.swift
 │
 └── Utilities/
-    ├── ImageStore.swift
-    ├── SignalEngine.swift
-    └── DateUtilities.swift
+    ├── ParkingSignalStatus.swift  (signal colors + evaluation engine)
+    └── Segment.swift · CurbGeometry.swift · DrivingSide.swift
+
+Notes
+	•	Guest-first: no account or login required.
+	•	AI is optional: signs are parsed on-device first; an OpenAI key
+		(Settings → AI Analysis) refines results when configured.
 
     
 ⸻
