@@ -11,20 +11,22 @@ final class LocationManager: NSObject, ObservableObject {
     private let manager = CLLocationManager()
 
     override init() {
-        // Seed with current status so the UI has a real value immediately
-        self.authorizationStatus = CLLocationManager().authorizationStatus
+        // Seed with current status so the UI has a real value immediately.
+        // Read from the real manager instance rather than allocating a
+        // throwaway CLLocationManager.
+        self.authorizationStatus = manager.authorizationStatus
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 5 // meters
-        self.authorizationStatus = manager.authorizationStatus
     }
 
     func requestWhenInUseAuthorization() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            errorMessage = "Location Services are disabled. Enable them in Settings."
-            return
-        }
+        // Note: CLLocationManager.locationServicesEnabled() is a blocking
+        // cross-process call and must not run on the main actor (iOS 26 flags
+        // it as "unsafeForcedSync"). If services are disabled system-wide, the
+        // request simply won't prompt and the delegate reports .denied/.restricted,
+        // which is surfaced with a Settings hint below.
         manager.requestWhenInUseAuthorization()
     }
 
@@ -36,10 +38,6 @@ final class LocationManager: NSObject, ObservableObject {
             return
         }
 
-        guard CLLocationManager.locationServicesEnabled() else {
-            errorMessage = "Location Services are disabled. Enable them in Settings."
-            return
-        }
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
