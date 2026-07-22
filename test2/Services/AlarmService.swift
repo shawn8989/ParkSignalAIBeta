@@ -136,17 +136,19 @@ final class AlarmService: ObservableObject {
         #if ALARMKIT_HAS_STANDARD_BUTTONS
         if #available(iOS 26.0, *) {
             let id = UUID()
-            let countdown = Alarm.CountdownDuration(preAlert: seconds, postAlert: 0)
+            // postAlert must be nil for a one-shot parking timer. A non-nil
+            // (or zero) postAlert only makes sense paired with a `.countdown`
+            // secondary button; declaring `.countdown` without a valid
+            // postAlert duration makes AlarmKit trap (EXC_BREAKPOINT).
+            let countdown = Alarm.CountdownDuration(preAlert: seconds, postAlert: nil)
 
             let stopButton = AlarmButton(text: "Stop", textColor: .white, systemImageName: "stop.circle")
-            let repeatButton = AlarmButton(text: "Repeat", textColor: .white, systemImageName: "repeat.circle")
             let pauseButton = AlarmButton(text: "Pause", textColor: .white, systemImageName: "pause.circle")
 
+            // Stop-only alert: no secondary/repeat button, so no postAlert is required.
             let alert = AlarmPresentation.Alert(
                 title: title,
-                stopButton: stopButton,
-                secondaryButton: repeatButton,
-                secondaryButtonBehavior: .countdown
+                stopButton: stopButton
             )
             let countdownUI = AlarmPresentation.Countdown(
                 title: LocalizedStringResource("Time Remaining"),
