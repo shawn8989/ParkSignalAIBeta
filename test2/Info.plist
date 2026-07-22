@@ -14,7 +14,7 @@
 		</dict>
 		<dict/>
 	</array>
-	<key>Privacy – Location When In Use Usage Description (NSLocationWhenInUseUsageDescription)</key>
-	<string>We use your location to save and show your parking spot.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>ParkSignal uses alarms to alert you before a parking restriction starts so you can move your car in time.</string>
 </dict>
 </plist>

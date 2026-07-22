@@ -16,8 +16,7 @@ struct AlertsHubView: View {
     @State private var lastTestError: String? = nil
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 // Status section: show current permission state for notifications and alarms
                 Section("Status") {
                     HStack {
@@ -92,15 +91,14 @@ struct AlertsHubView: View {
                     }
                 }
 
-                if let err = lastTestError {
-                    Section("Last Error") {
-                        Text(err).foregroundStyle(.red)
-                    }
+            if let err = lastTestError {
+                Section("Last Error") {
+                    Text(err).foregroundStyle(.red)
                 }
             }
-            .navigationTitle("Alerts")
-            .task { await refreshStatuses() }
         }
+        .navigationTitle("Alerts")
+        .task { await refreshStatuses() }
     }
 
     // MARK: - Helpers

@@ -46,14 +46,9 @@ struct SettingsView: View {
 
                 Section(header: Text("Alerts")) {
                     NavigationLink {
-                        AlarmListView()
+                        AlertsHubView()
                     } label: {
-                        Label("Alarms", systemImage: "alarm")
-                    }
-                    NavigationLink {
-                        NotificationsView()
-                    } label: {
-                        Label("Notifications", systemImage: "bell")
+                        Label("Alerts & Alarms", systemImage: "alarm")
                     }
                 }
 

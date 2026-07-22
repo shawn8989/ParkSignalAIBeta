@@ -138,15 +138,19 @@ final class AlarmService: ObservableObject {
             let id = UUID()
             let countdown = Alarm.CountdownDuration(preAlert: seconds, postAlert: 0)
 
+            let stopButton = AlarmButton(text: "Stop", textColor: .white, systemImageName: "stop.circle")
+            let repeatButton = AlarmButton(text: "Repeat", textColor: .white, systemImageName: "repeat.circle")
+            let pauseButton = AlarmButton(text: "Pause", textColor: .white, systemImageName: "pause.circle")
+
             let alert = AlarmPresentation.Alert(
                 title: title,
-                stopButton: .stopButton,
-                secondaryButton: .snoozeButton,
+                stopButton: stopButton,
+                secondaryButton: repeatButton,
                 secondaryButtonBehavior: .countdown
             )
             let countdownUI = AlarmPresentation.Countdown(
                 title: LocalizedStringResource("Time Remaining"),
-                pauseButton: .pauseButton
+                pauseButton: pauseButton
             )
             let presentation = AlarmPresentation(alert: alert, countdown: countdownUI, paused: nil)
 
@@ -190,7 +194,7 @@ final class AlarmService: ObservableObject {
                     let meta = metadata(forAlarmID: alarm.id)
                     return SimpleAlarm(
                         id: alarm.id,
-                        title: "Alarm",
+                        title: "Parking Alarm",
                         endDate: endDate,
                         raw: alarm,
                         source: .alarmKit,
@@ -268,7 +272,7 @@ final class AlarmService: ObservableObject {
         self.objectWillChange.send()
     }
 
-    /// Cancel all scheduled alarms.
+    /// Cancel all scheduled alarms — both AlarmKit alarms and pending local notifications.
     func cancelAll() async {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
@@ -281,12 +285,9 @@ final class AlarmService: ObservableObject {
             } catch {
                 // ignore failures
             }
-        } else {
-            cancelAllFallbackNotifications()
         }
-        #else
-        cancelAllFallbackNotifications()
         #endif
+        cancelAllFallbackNotifications()
     }
 
     /// Fallback: cancel all pending local notifications scheduled by the app.

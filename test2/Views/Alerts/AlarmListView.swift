@@ -1,87 +1,87 @@
 // AlarmListView.swift
 import SwiftUI
+import SwiftData
 
 struct AlarmListView: View {
     @StateObject private var alarmService = AlarmService.shared
+    @Environment(\.modelContext) private var modelContext
     @State private var alarms: [AlarmService.SimpleAlarm] = []
-    @State private var isAuthorized = false
+    @Query private var cars: [Car]
+    @Query private var spots: [ParkingSpot]
 
     var body: some View {
-        NavigationStack {
-            List {
-                if alarms.isEmpty {
-                    Text("No alarms scheduled.")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(alarms) { alarm in
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: alarm.source == .alarmKit ? "alarm" : "bell")
-                                        .foregroundStyle(alarm.source == .alarmKit ? .orange : .blue)
-                                    Text(alarm.title)
-                                        .font(.headline)
-                                }
-                                HStack(spacing: 6) {
-                                    Text(timerInterval: Date.now...max(Date.now, alarm.endDate), countsDown: true)
+        List {
+            if alarms.isEmpty {
+                ContentUnavailableView(
+                    "No Active Alarms",
+                    systemImage: "alarm",
+                    description: Text("Alarms and reminders you schedule for parking restrictions will appear here.")
+                )
+            } else {
+                ForEach(alarms) { alarm in
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: alarm.source == .alarmKit ? "alarm.fill" : "bell.fill")
+                            .foregroundStyle(alarm.source == .alarmKit ? .orange : .blue)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(alarm.title)
+                                .font(.headline)
+                            HStack(spacing: 6) {
+                                Text(timerInterval: Date.now...max(Date.now, alarm.endDate), countsDown: true)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                if let name = contextName(for: alarm) {
+                                    Text("•")
+                                    Text(name)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
-                                    if let carID = alarm.carID, let car = carName(for: carID) {
-                                        Text("•")
-                                        Text(car)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
                                 }
                             }
-                            Spacer()
-                            Toggle(isOn: Binding(get: {
-                                // On if in list; turning off cancels
-                                true
-                            }, set: { on in
-                                if !on {
-                                    Task { await cancel(alarm) }
-                                }
-                            })) {
-                                EmptyView()
-                            }
-                            .labelsHidden()
+                            Text(alarm.source == .alarmKit ? "System alarm" : "Notification")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
                         }
+                        Spacer()
+                        Button(role: .destructive) {
+                            Task { await cancel(alarm) }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Cancel alarm")
                     }
-                    .onDelete { indexSet in
-                        Task {
-                            for index in indexSet {
-                                await alarmService.cancel(id: alarms[index].id)
-                            }
-                            await refresh()
+                }
+                .onDelete { indexSet in
+                    Task {
+                        for index in indexSet where index < alarms.count {
+                            await cancel(alarms[index], refreshAfter: false)
                         }
+                        await refresh()
                     }
                 }
             }
-            .navigationTitle("Alarms")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task {
-                            let ok = await alarmService.requestAuthorization()
-                            isAuthorized = ok
-                            await refresh()
-                        }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                }
-                ToolbarItem(placement: .destructiveAction) {
-                    Button("Cancel All", role: .destructive) {
-                        Task {
-                            await alarmService.cancelAll()
-                            await refresh()
-                        }
-                    }
-                }
-            }
-            .task { await refresh() }
         }
+        .navigationTitle("Alarms")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            ToolbarItem(placement: .destructiveAction) {
+                Button("Cancel All", role: .destructive) {
+                    Task {
+                        await alarmService.cancelAll()
+                        await refresh()
+                    }
+                }
+                .disabled(alarms.isEmpty)
+            }
+        }
+        .task { await refresh() }
+        .refreshable { await refresh() }
     }
 
     @MainActor
@@ -89,13 +89,19 @@ struct AlarmListView: View {
         alarms = await alarmService.allAlarms()
     }
 
-    private func carName(for id: UUID) -> String? {
-        // Best-effort lookup from UserDefaults or a cache; if you have SwiftData context here, you could query Cars.
-        // For now, return nil.
-        return nil
+    /// Best-effort "CarName @ SpotLocation" label from the alarm's metadata.
+    private func contextName(for alarm: AlarmService.SimpleAlarm) -> String? {
+        let carName = alarm.carID.flatMap { id in cars.first(where: { $0.id == id })?.nickname }
+        let spotName = alarm.spotID.flatMap { id in spots.first(where: { $0.id == id })?.location }
+        switch (carName, spotName) {
+        case let (car?, spot?): return "\(car) @ \(spot)"
+        case let (car?, nil): return car
+        case let (nil, spot?): return spot
+        default: return nil
+        }
     }
 
-    private func cancel(_ alarm: AlarmService.SimpleAlarm) async {
+    private func cancel(_ alarm: AlarmService.SimpleAlarm, refreshAfter: Bool = true) async {
         switch alarm.source {
         case .alarmKit:
             await alarmService.cancel(id: alarm.id)
@@ -104,6 +110,8 @@ struct AlarmListView: View {
                 await alarmService.cancelNotification(identifier: ident)
             }
         }
-        await refresh()
+        if refreshAfter {
+            await refresh()
+        }
     }
 }

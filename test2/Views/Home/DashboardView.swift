@@ -272,8 +272,8 @@ struct DashboardView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: AlarmListView()) {
-                        Label("Alarms", systemImage: "alarm")
+                    NavigationLink(destination: AlertsHubView()) {
+                        Label("Alerts", systemImage: "alarm")
                     }
                 }
 
