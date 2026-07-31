@@ -13,7 +13,7 @@ struct LandingView: View {
                     .resizable()
                     .frame(width: 96, height: 64)
                     .foregroundColor(.accentColor)
-                Text("Welcome to ParkMate")
+                Text("Welcome to ParkSignal AI")
                     .font(.largeTitle.bold())
                 Text("Find legal parking, avoid tickets, and save time.")
                     .font(.title3)

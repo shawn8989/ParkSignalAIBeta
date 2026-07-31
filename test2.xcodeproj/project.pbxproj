@@ -424,7 +424,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = test2/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Used to scan street signs.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location will be used";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ParkSignal uses your location to show nearby parking spots and check the rules for where you are parked.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -462,7 +462,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = test2/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Used to scan street signs.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location will be used";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ParkSignal uses your location to show nearby parking spots and check the rules for where you are parked.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
