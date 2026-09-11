@@ -47,6 +47,8 @@ struct ParkMateApp: App {
 }
 
 struct RootView: View {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     var body: some View {
         // Local-first: no accounts, open straight into the app.
         TabView {
@@ -56,6 +58,9 @@ struct RootView: View {
                 .tabItem { Label("Map", systemImage: "map") }
             CarListView()
                 .tabItem { Label("Cars", systemImage: "car") }
+        }
+        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
+            OnboardingView { hasCompletedOnboarding = true }
         }
     }
 }

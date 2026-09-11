@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Unit Test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "import sys, json; d=json.load(sys.stdin)['devices']; ids=[x['udid'] for rt in d for x in d[rt] if x.get('isAvailable') and 'iPhone' in x.get('name','')]; print(ids[0] if ids else '')")
+          if [ -z "$UDID" ]; then echo 'No iPhone simulator available' >&2; exit 1; fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using simulator: $UDID"
+
+      - name: Build & test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project test2.xcodeproj \
+            -scheme test2 \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          if-no-files-found: ignore
