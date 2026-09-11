@@ -64,32 +64,9 @@ struct QuickScanSheet: View {
                     }
                     ButtonsRow(
                         recognizedText: $recognizedText,
-                        onAnalyzeAI: { Task { await analyzeRecognizedText(useAI: true) } },
-                        onAnalyzeLocal: { Task { await analyzeRecognizedText(useAI: false) } },
-                        onTestNotification: {
-                            Task {
-                                let _ = await NotificationManager.shared.requestAuthorizationIfNeeded()
-                                await testNotification()
-                            }
-                        },
+                        onAnalyze: { Task { await analyzeRecognizedText(useAI: false) } },
                         onClear: { recognizedText = "" }
                     )
-                    .padding(.horizontal)
-                }
-
-                if !analysisOutput.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Analysis Result")
-                            .font(.headline)
-                        ScrollView {
-                            Text(analysisOutput)
-                                .font(.footnote.monospaced())
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                        }
-                        .frame(maxHeight: 180)
-                    }
                     .padding(.horizontal)
                 }
 
@@ -361,30 +338,11 @@ struct QuickScanSheet: View {
         }
     }
 
-    private func testNotification() async {
-        let center = UNUserNotificationCenter.current()
-        let content = UNMutableNotificationContent()
-        content.title = "Test Parking Reminder"
-        content.body = "This is a test notification triggered from Quick Scan."
-        content.sound = .default
-        if #available(iOS 15.0, *) {
-            content.interruptionLevel = .timeSensitive
-        }
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
-        let request = UNNotificationRequest(identifier: "test.quickscan.notification", content: content, trigger: trigger)
-        do {
-            try await center.add(request)
-        } catch {
-            errorMessage = "Failed to schedule notification: \(error.localizedDescription)"
-        }
-    }
 }
 
 private struct ButtonsRow: View {
     @Binding var recognizedText: String
-    var onAnalyzeAI: () -> Void
-    var onAnalyzeLocal: () -> Void
-    var onTestNotification: () -> Void
+    var onAnalyze: () -> Void
     var onClear: () -> Void
 
     var body: some View {
@@ -394,18 +352,12 @@ private struct ButtonsRow: View {
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
 
             Spacer()
 
-            Button("Analyze (AI)", action: onAnalyzeAI)
-                .buttonStyle(.bordered)
-
-            Button("Analyze (Local)", action: onAnalyzeLocal)
-                .buttonStyle(.bordered)
-
-            Button("Test Notification", action: onTestNotification)
-                .buttonStyle(.bordered)
+            Button("Analyze", action: onAnalyze)
+                .buttonStyle(.borderedProminent)
 
             Button("Clear", action: onClear)
                 .buttonStyle(.bordered)

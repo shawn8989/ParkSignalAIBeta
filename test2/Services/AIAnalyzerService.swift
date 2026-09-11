@@ -65,16 +65,12 @@ actor AIAnalyzerService {
     }
 
     func analyze(ocrText: String, apiKey: String? = nil) async throws -> (parsed: AIAnalysisResponse, rawJSON: String) {
-        var keySource = "none"
         let trimmedParam = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
         let envKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let plistKey = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = (trimmedParam?.isEmpty == false ? trimmedParam : nil)
             ?? (envKey?.isEmpty == false ? envKey : nil)
             ?? (plistKey?.isEmpty == false ? plistKey : nil)
-        if trimmedParam != nil, trimmedParam?.isEmpty == false { keySource = "param" }
-        else if envKey != nil, envKey?.isEmpty == false { keySource = "env" }
-        else if plistKey != nil, plistKey?.isEmpty == false { keySource = "plist" }
         guard let apiKey = key, !apiKey.isEmpty else {
             throw NSError(
                 domain: "AIAnalyzerService",
@@ -82,11 +78,8 @@ actor AIAnalyzerService {
                 userInfo: [NSLocalizedDescriptionKey: "Missing OpenAI API key. Provide OPENAI_API_KEY via: (1) function parameter, (2) Run scheme environment variable, or (3) Info.plist value expanded from a build setting."]
             )
         }
-        print("AIAnalyzerService: Resolved API key source = \(keySource)")
-        print("AIAnalyzerService: Using API key (masked) = \(maskKey(apiKey))")
 
         // Debug: which API key source is used
-//        print("AIAnalyzerService: Using API key from Info.plist? \(key != nil)")
 
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
@@ -141,10 +134,7 @@ actor AIAnalyzerService {
 
         request.httpBody = try JSONEncoder().encode(body)
         
-        print("AIAnalyzerService: Performing OpenAI request (analyze)")
         let (data, http) = try await performRequest(request)
-        print("AIAnalyzerService: OpenAI HTTP status = \(http.statusCode)")
-        print("AIAnalyzerService: OpenAI response prefix = \(String(data: data.prefix(120), encoding: .utf8) ?? "<non-utf8>")")
 
         guard (200...299).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
@@ -162,16 +152,12 @@ actor AIAnalyzerService {
     }
     
     func analyzeWithDebug(ocrText: String, apiKey: String? = nil) async throws -> AnalyzeDebugResult {
-        var keySource = "none"
         let trimmedParam = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
         let envKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let plistKey = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = (trimmedParam?.isEmpty == false ? trimmedParam : nil)
             ?? (envKey?.isEmpty == false ? envKey : nil)
             ?? (plistKey?.isEmpty == false ? plistKey : nil)
-        if trimmedParam != nil, trimmedParam?.isEmpty == false { keySource = "param" }
-        else if envKey != nil, envKey?.isEmpty == false { keySource = "env" }
-        else if plistKey != nil, plistKey?.isEmpty == false { keySource = "plist" }
         guard let apiKey = key, !apiKey.isEmpty else {
             throw NSError(
                 domain: "AIAnalyzerService",
@@ -179,11 +165,8 @@ actor AIAnalyzerService {
                 userInfo: [NSLocalizedDescriptionKey: "Missing OpenAI API key. Provide OPENAI_API_KEY via: (1) function parameter, (2) Run scheme environment variable, or (3) Info.plist value expanded from a build setting."]
             )
         }
-        print("AIAnalyzerService: Resolved API key source = \(keySource)")
-        print("AIAnalyzerService: Using API key (masked) = \(maskKey(apiKey))")
 
         // Debug: which API key source is used
-//        print("AIAnalyzerService: Using API key (debug) from Info.plist? \(apiKey.isEmpty == false)")
 
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
@@ -248,12 +231,9 @@ actor AIAnalyzerService {
         let requestJSONString = String(data: requestJSONData, encoding: .utf8) ?? ""
         request.httpBody = requestJSONData
 
-        print("AIAnalyzerService: Performing OpenAI request (debug)")
         let (data, http) = try await performRequest(request)
         let httpStatus = http.statusCode
-        print("AIAnalyzerService: OpenAI HTTP status = \(http.statusCode)")
         let responseBody = String(data: data, encoding: .utf8) ?? ""
-        print("AIAnalyzerService: OpenAI response prefix = \(String(data: data.prefix(120), encoding: .utf8) ?? "<non-utf8>")")
 
         guard (200...299).contains(httpStatus) else {
             throw NSError(domain: "AIAnalyzerService", code: -2, userInfo: [NSLocalizedDescriptionKey: "OpenAI error (status: \(httpStatus)): \(responseBody)"])
@@ -268,12 +248,5 @@ actor AIAnalyzerService {
         return AnalyzeDebugResult(parsed: parsed, rawJSON: content, httpStatus: httpStatus, requestJSON: requestJSONString, responseBody: responseBody)
     }
     
-    private func maskKey(_ key: String) -> String {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count <= 8 { return "••••" }
-        let start = trimmed.prefix(4)
-        let end = trimmed.suffix(4)
-        return String(start) + "••••" + String(end)
-    }
 }
 

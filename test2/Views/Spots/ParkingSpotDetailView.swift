@@ -246,7 +246,6 @@ struct ParkingSpotDetailView: View {
                         try context.save()
                     } catch {
                         // In a real app, surface this to the user
-                        print("Failed to save restriction: \(error)")
                     }
                     onUpdate?(spot)
                     Task { await enrichFromCityData() }
@@ -397,7 +396,6 @@ struct ParkingSpotDetailView: View {
                                     activeSpot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
                                 }
                                 if let lastScan {
-                                    try? await LocalStubBackendSyncService.shared.uploadRestrictions(for: lastScan, restrictions: createdRestrictions)
                                     await MainActor.run {
                                         // Link restrictions to this scan
                                         for r in createdRestrictions { r.scan = lastScan }
@@ -1215,41 +1213,6 @@ struct ParkingSpotDetailView: View {
     }
 
     @MainActor
-    private func processCapturedImage() async {
-        guard let image = capturedImage else { return }
-        isAnalyzing = true
-        defer { isAnalyzing = false }
-        do {
-            // Save image first to link to restrictions later
-            photoFilename = try ImageStore.saveJPEG(image)
-
-            // OCR (on-device)
-            let text = try await ocrService.recognizeText(in: image)
-            ocrText = text
-
-            spot.lastScanText = text
-            spot.lastScanPhotoFilename = photoFilename
-            spot.lastScanAt = Date()
-            try? context.save()
-
-            try await runParsing(for: text)
-        } catch {
-            scanError = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func processRecognizedText(_ text: String) async {
-        ocrText = text
-
-        spot.lastScanText = text
-        spot.lastScanAt = Date()
-        try? context.save()
-
-        await runParsing(for: text)
-    }
-
-    @MainActor
     private func runParsing(for text: String) async {
         isAnalyzing = true
         defer { isAnalyzing = false }
@@ -1279,31 +1242,12 @@ struct ParkingSpotDetailView: View {
         }
     }
 
-    private func startGenericParking() {
-        do {
-            // End any open generic ParkSession (no car) across all spots
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.endedAt == nil && s.car == nil { s.endedAt = Date() }
-
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: nil)
-            context.insert(session)
-            try context.save()
-
-            // Schedule notifications for this spot's restrictions
-            Task { await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot) }
-        } catch {
-            print("Failed to start parking: \(error)")
-        }
-    }
-
     private func endGenericParking() {
         do {
             let all = try context.fetch(FetchDescriptor<ParkSession>())
             for s in all where s.endedAt == nil && s.spot?.id == spot.id && s.car == nil { s.endedAt = Date() }
             try context.save()
         } catch {
-            print("Failed to end parking: \(error)")
         }
     }
     
