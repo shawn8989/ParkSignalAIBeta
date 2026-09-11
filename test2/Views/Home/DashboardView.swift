@@ -9,7 +9,6 @@ import CoreLocation
 import SwiftData
 
 struct DashboardView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.modelContext) private var context
     @StateObject private var dataProvider = ParkingDataProvider.shared
 
@@ -277,13 +276,6 @@ struct DashboardView: View {
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
-                    if auth.isAuthenticated {
-                        Button("Logout") { auth.logout() }
-                    } else if auth.isGuest {
-                        Button("Exit Guest") { auth.exitGuest() }
-                    }
-                }
             }
             .onAppear {
                 // Seed data if needed
@@ -348,24 +340,21 @@ struct DashboardView: View {
             }
             .navigationDestination(item: $selectedSpot) { spot in
                 ParkingSpotDetailView(spot: spot, onUpdate: { _ in })
-                    .environmentObject(auth)
             }
         }
     }
 
     private func seedIfNeeded() {
         guard !hasSeeded else { return }
+        // Demo spots are for development only and must never ship to users.
+        #if DEBUG
         if spots.isEmpty {
             for spot in MockData.parkingSpots {
                 context.insert(spot)
             }
-            do {
-                try context.save()
-            } catch {
-                print("HomeView: Failed to seed mock data: \(error)")
-                print("HomeView: Existing spots count after seed attempt: \(spots.count)")
-            }
+            try? context.save()
         }
+        #endif
         hasSeeded = true
     }
 

@@ -8,7 +8,6 @@ import MapKit
 import Combine
 
 struct ParkingSpotDetailView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -85,7 +84,7 @@ struct ParkingSpotDetailView: View {
     @State private var pendingAlerts: [String: Date] = [:] // carID.uuidString -> next fire date
 
     private var currentUserID: UUID? {
-        auth.currentUser?.id
+        LocalIdentity.userID
     }
     
     private var spotCoordinate: CLLocationCoordinate2D {
@@ -167,8 +166,6 @@ struct ParkingSpotDetailView: View {
                 } label: {
                     Label("Add Restriction", systemImage: "plus")
                 }
-                .disabled(!auth.isAuthenticated)
-                .help(auth.isAuthenticated ? "Add a restriction" : "Login to add restrictions")
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -256,7 +253,6 @@ struct ParkingSpotDetailView: View {
                 },
                 sourceUser: currentUserID ?? UUID()
             )
-            .environmentObject(auth)
         }
         .sheet(isPresented: $showCamera) {
             CameraPicker { image in
