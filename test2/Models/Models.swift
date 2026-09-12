@@ -17,16 +17,16 @@ enum RestrictionType: String, Codable, Hashable, CaseIterable {
 
 @Model
 final class User {
-    @Attribute(.unique) var id: UUID
-    var username: String
-    var email: String
-    var passwordHash: String
-    var registeredAt: Date
+    var id: UUID = UUID()
+    var username: String = ""
+    var email: String = ""
+    var passwordHash: String = ""
+    var registeredAt: Date = Date.now
 
     @Relationship(deleteRule: .cascade, inverse: \Car.owner)
     var cars: [Car] = []
 
-    init(id: UUID = UUID(), username: String, email: String, passwordHash: String, registeredAt: Date = .now) {
+    init(id: UUID = UUID(), username: String, email: String, passwordHash: String, registeredAt: Date = Date.now) {
         self.id = id
         self.username = username
         self.email = email
@@ -39,11 +39,11 @@ final class User {
 
 @Model
 final class Car {
-    @Attribute(.unique) var id: UUID
-    var nickname: String
+    var id: UUID = UUID()
+    var nickname: String = ""
     var licensePlate: String?
     var colorHex: String?
-    var iconName: String
+    var iconName: String = "car.fill"
 
     @Relationship var owner: User?
 
@@ -73,13 +73,13 @@ final class Car {
 
 @Model
 final class ParkingSpot {
-    @Attribute(.unique) var id: UUID
-    var location: String
-    var latitude: Double
-    var longitude: Double
-    var streetSide: String // "left" or "right" or other
+    var id: UUID = UUID()
+    var location: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var streetSide: String = "" // "left" or "right" or other
     @Relationship(deleteRule: .cascade, inverse: \Restriction.spot)
-    var restrictions: [Restriction]
+    var restrictions: [Restriction] = []
 
     @Relationship(deleteRule: .cascade, inverse: \SignScan.spot)
     var signScans: [SignScan] = []
@@ -154,7 +154,7 @@ final class ParkingSpot {
     }
 
     @discardableResult
-    func startParking(for car: Car? = nil, now: Date = .now) -> ParkSession {
+    func startParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession {
         // End any existing active session for this car (or any if car is nil)
         if let car {
             if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
@@ -169,7 +169,7 @@ final class ParkingSpot {
         return session
     }
 
-    func endCurrentParking(for car: Car? = nil, at date: Date = .now) {
+    func endCurrentParking(for car: Car? = nil, at date: Date = Date.now) {
         if let car {
             if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
                 parkSessions[idx].endedAt = date
@@ -180,7 +180,7 @@ final class ParkingSpot {
     }
 
     @discardableResult
-    func toggleParking(for car: Car? = nil, now: Date = .now) -> ParkSession? {
+    func toggleParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession? {
         if isCurrentlyParked(for: car) {
             endCurrentParking(for: car, at: now)
             return nil
@@ -194,10 +194,10 @@ final class ParkingSpot {
 
 @Model
 final class Restriction {
-    @Attribute(.unique) var id: UUID
-    var type: RestrictionType
-    var startTime: Date
-    var endTime: Date
+    var id: UUID = UUID()
+    var type: RestrictionType = RestrictionType.other
+    var startTime: Date = Date.now
+    var endTime: Date = Date.now
     var daysMask: Int = 0 // bitmask for days: Sunday bit0 ... Saturday bit6
     
     // Computed accessor for days of week as indices (0 = Sun ... 6 = Sat)
@@ -210,7 +210,7 @@ final class Restriction {
             daysMask = clamped.reduce(0) { $0 | (1 << $1) }
         }
     }
-    var sourceUser: UUID // the User.id that added this restriction
+    var sourceUser: UUID = UUID() // the User.id that added this restriction
     var signPhotoFilename: String? // placeholder for image storage
     var ocrText: String? // AI-detected text from sign
 
@@ -264,15 +264,15 @@ final class Restriction {
 // MARK: - ParkSession (Parking History)
 @Model
 final class ParkSession {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     @Relationship var spot: ParkingSpot?
     @Relationship var car: Car?
-    var startedAt: Date
+    var startedAt: Date = Date.now
     var endedAt: Date?
     
     var isActive: Bool { endedAt == nil }
 
-    init(id: UUID = UUID(), spot: ParkingSpot? = nil, startedAt: Date = .now, endedAt: Date? = nil, car: Car? = nil) {
+    init(id: UUID = UUID(), spot: ParkingSpot? = nil, startedAt: Date = Date.now, endedAt: Date? = nil, car: Car? = nil) {
         self.id = id
         self.spot = spot
         self.startedAt = startedAt
@@ -284,11 +284,11 @@ final class ParkSession {
 // MARK: - SignScan (Street Sign pins captured from live scans)
 @Model
 final class SignScan {
-    @Attribute(.unique) var id: UUID
-    var latitude: Double
-    var longitude: Double
-    var ocrText: String
-    var createdAt: Date
+    var id: UUID = UUID()
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var ocrText: String = ""
+    var createdAt: Date = Date.now
     var photoFilename: String?
     var additionalPhotoFilenames: [String] = []
     var photoFilenames: [String] = []
@@ -329,7 +329,7 @@ final class SignScan {
         latitude: Double,
         longitude: Double,
         ocrText: String,
-        createdAt: Date = .now,
+        createdAt: Date = Date.now,
         photoFilename: String? = nil,
         additionalPhotoFilenames: [String] = [],
         photoFilenames: [String] = [],
@@ -393,7 +393,7 @@ final class SignScan {
     }
 
     // Persist results from either AI or local analyzers
-    func applyAnalysis(aiText: String? = nil, localText: String? = nil, at date: Date = .now) {
+    func applyAnalysis(aiText: String? = nil, localText: String? = nil, at date: Date = Date.now) {
         if let aiText { self.aiAnalysisText = aiText }
         if let localText { self.localAnalysisText = localText }
         self.analyzedAt = date

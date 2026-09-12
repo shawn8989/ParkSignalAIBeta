@@ -435,6 +435,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = test2/test2.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.SOTech.ParkSignalAI;
 				PRODUCT_NAME = "ParkSignal AI";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -471,6 +472,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = test2/test2.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.SOTech.ParkSignalAI;
 				PRODUCT_NAME = "ParkSignal AI";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
