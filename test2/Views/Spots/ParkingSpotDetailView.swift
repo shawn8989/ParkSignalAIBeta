@@ -61,12 +61,10 @@ struct ParkingSpotDetailView: View {
         spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
     }
 
-    @AppStorage("useAIParsing") private var useAIParsing: Bool = true
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
     @AppStorage("autoScheduleAlertOnPark") private var autoScheduleOnPark: Bool = false
 
     private let ocrService = VisionOCRService()
-    private let aiService = AIAnalyzerService()
     private let localParser = ParkingTextParser()
     
     @Query private var cars: [Car]
@@ -193,20 +191,17 @@ struct ParkingSpotDetailView: View {
                 if let text = spot.lastScanText, !text.isEmpty {
                     Button {
                         Task { @MainActor in
-                            // Force AI parsing for re-analysis regardless of the toggle
                             self.usedAIParsing = nil
                             self.aiFallbackReason = nil
                             self.ocrText = text
                             self.isAnalyzing = true
                             defer { self.isAnalyzing = false }
-                            // Prefer AI, fallback to local inside runParsing
-                            self.useAIParsing = true
                             await runParsing(for: text)
                         }
                     } label: {
-                        Label("Re-Analyze (AI)", systemImage: "arrow.triangle.2.circlepath")
+                        Label("Re-Analyze", systemImage: "arrow.triangle.2.circlepath")
                     }
-                    .help("Re-run analysis with AI and update restrictions if desired")
+                    .help("Re-run analysis on this scan's text and update restrictions")
                 }
             }
         }
@@ -1213,29 +1208,12 @@ struct ParkingSpotDetailView: View {
     private func runParsing(for text: String) async {
         isAnalyzing = true
         defer { isAnalyzing = false }
-        usedAIParsing = nil
+        // v1 interprets signs on-device (no cloud AI).
+        usedAIParsing = false
         aiFallbackReason = nil
-        do {
-            if useAIParsing {
-                do {
-                    let result = try await aiService.analyzeWithDebug(ocrText: text)
-                    analysis = result.parsed
-                    usedAIParsing = true
-                } catch {
-                    // Record fallback reason and use local parsing
-                    aiFallbackReason = error.localizedDescription
-                    analysis = localParser.analyze(ocrText: text)
-                    usedAIParsing = false
-                }
-            } else {
-                analysis = localParser.analyze(ocrText: text)
-                usedAIParsing = false
-            }
-            if let analysis, !analysis.restrictions.isEmpty {
-                showAnalysisSheet = true
-            }
-        } catch {
-            scanError = error.localizedDescription
+        analysis = localParser.analyze(ocrText: text)
+        if let analysis, !analysis.restrictions.isEmpty {
+            showAnalysisSheet = true
         }
     }
 
