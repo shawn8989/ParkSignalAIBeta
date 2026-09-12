@@ -6,5 +6,12 @@
 	<string>ParkSignal uses alarms to alert you before a parking restriction starts so you can move your car in time.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ParkSignal needs access to your photos so you can pick an existing picture of a parking sign to analyze.</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchLogo</string>
+	</dict>
 </dict>
 </plist>
