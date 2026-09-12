@@ -29,7 +29,7 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           echo "Using simulator: $UDID"
 
-      - name: Build & test
+      - name: Build & test (unit tests)
         run: |
           set -o pipefail
           xcodebuild test \
@@ -37,11 +37,15 @@ jobs:
             -scheme test2 \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -configuration Debug \
+            -only-testing:test2Tests \
             CODE_SIGNING_ALLOWED=NO \
             -resultBundlePath TestResults.xcresult
+        # Note: the UI-test target (test2UITests) is Xcode boilerplate and is
+        # excluded here — it hangs on GitHub runners (instruments lockdown
+        # timeout). Unit tests cover the real logic.
 
-      - name: Upload test results
-        if: always()
+      - name: Upload test results (on failure)
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
