@@ -97,6 +97,7 @@ struct DashboardView: View {
                     HStack(spacing: 10) {
                         Image(systemName: status.iconName)
                             .foregroundStyle(status.color)
+                            .accessibilityHidden(true)
                         Text("My Curb Signal: \(status.label)")
                             .font(.subheadline)
                         Spacer()
@@ -476,6 +477,7 @@ struct DashboardView: View {
     private func signalBadge(for status: ParkingSignalStatus) -> some View {
         HStack(spacing: 6) {
             Image(systemName: status.iconName)
+                .accessibilityHidden(true)
             Text(status.label)
         }
         .font(.caption)

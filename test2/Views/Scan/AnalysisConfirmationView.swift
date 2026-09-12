@@ -15,6 +15,7 @@ struct AnalysisConfirmationView: View {
     @State private var includeFlags: [Bool] = []
     @State private var cannotParkNow: Bool = false
     @State private var setAsCurrentParking: Bool = true
+    @State private var saveError: String?
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
     var body: some View {
@@ -89,6 +90,11 @@ struct AnalysisConfirmationView: View {
             }
             .onChange(of: analysis.restrictions.count) { newCount in
                 includeFlags = Array(repeating: true, count: newCount)
+            }
+            .alert("Couldn't Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveError ?? "")
             }
         }
     }
@@ -187,7 +193,8 @@ struct AnalysisConfirmationView: View {
         do {
             try context.save()
         } catch {
-            // Best-effort; still try scheduling
+            saveError = "Couldn't save these restrictions: \(error.localizedDescription)"
+            return
         }
 
         if setAsCurrentParking {
