@@ -3,11 +3,11 @@ import SwiftData
 
 @Model
 final class NotificationLogEntry {
-    @Attribute(.unique) var id: UUID
-    var requestIdentifier: String
-    var createdAt: Date
-    var title: String
-    var body: String
+    var id: UUID = UUID()
+    var requestIdentifier: String = ""
+    var createdAt: Date = Date.now
+    var title: String = ""
+    var body: String = ""
     var categoryIdentifier: String?
     var scheduledFor: Date?
     var deliveredAt: Date?

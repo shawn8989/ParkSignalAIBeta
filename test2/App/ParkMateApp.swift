@@ -30,15 +30,41 @@ final class AppNotificationDelegate: NSObject, UNUserNotificationCenterDelegate 
 
 @main
 struct ParkMateApp: App {
+    let sharedModelContainer: ModelContainer
+
     init() {
         UNUserNotificationCenter.current().delegate = AppNotificationDelegate.shared
+
+        let schema = Schema([
+            User.self, Car.self, ParkingSpot.self, Restriction.self,
+            CurrentParking.self, ParkSession.self, SignScan.self
+        ])
+        // Sync the user's own data across their devices via the CloudKit private
+        // database (iCloud identity is the "account" — no login needed).
+        let cloudConfig = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .private("iCloud.com.SOTech.ParkSignalAI")
+        )
+        do {
+            sharedModelContainer = try ModelContainer(for: schema, configurations: [cloudConfig])
+        } catch {
+            // Local-first fallback: if CloudKit is unavailable or misconfigured,
+            // keep working on-device only rather than failing to launch.
+            let localConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+            do {
+                sharedModelContainer = try ModelContainer(for: schema, configurations: [localConfig])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .modelContainer(for: [User.self, Car.self, ParkingSpot.self, Restriction.self, CurrentParking.self, ParkSession.self, SignScan.self])
         }
+        .modelContainer(sharedModelContainer)
     }
 }
 

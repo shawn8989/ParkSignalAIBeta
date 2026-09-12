@@ -124,10 +124,10 @@ struct AnalysisConfirmationView: View {
             let currentFetch = FetchDescriptor<CurrentParking>()
             let existingCurrent = try context.fetch(currentFetch)
             if let first = existingCurrent.first {
-                first.spot = spot
+                first.spotID = spot.id
                 first.parkedAt = Date()
             } else {
-                let current = CurrentParking(spot: spot, parkedAt: Date())
+                let current = CurrentParking(spotID: spot.id, parkedAt: Date())
                 context.insert(current)
             }
 
