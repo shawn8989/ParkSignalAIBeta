@@ -424,6 +424,9 @@ final class SignScan {
 
 // MARK: - Mock Data
 
+#if DEBUG
+// Demo data for development only (seeded behind #if DEBUG). Never compiled
+// into a Release build — keeps the fake accounts/spots out of the shipped app.
 struct MockData {
     static var users: [User] {
         [
@@ -487,6 +490,7 @@ struct MockData {
         return calendar.date(from: components) ?? now
     }
 }
+#endif
 
 // MARK: - Simple SHA256 Hash
 

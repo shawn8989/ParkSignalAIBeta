@@ -32,38 +32,31 @@ final class AppNotificationDelegate: NSObject, UNUserNotificationCenterDelegate 
 struct ParkMateApp: App {
     init() {
         UNUserNotificationCenter.current().delegate = AppNotificationDelegate.shared
-        
-        NotificationCenter.default.addObserver(forName: Notification.Name("NotificationLog.Record"), object: nil, queue: .main) { notification in
-            // TODO: wire persistence of notification logs
-        }
     }
-    
-    @StateObject private var auth = AuthViewModel()
-    
+
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(auth)
                 .modelContainer(for: [User.self, Car.self, ParkingSpot.self, Restriction.self, CurrentParking.self, ParkSession.self, SignScan.self])
         }
     }
 }
 
 struct RootView: View {
-    @EnvironmentObject private var auth: AuthViewModel
-    
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     var body: some View {
-        if auth.isAuthenticated || auth.isGuest {
-            TabView {
-                DashboardView()
-                    .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
-                SpotsMapView()
-                    .tabItem { Label("Map", systemImage: "map") }
-                CarListView()
-                    .tabItem { Label("Cars", systemImage: "car") }
-            }
-        } else {
-            LandingView()
+        // Local-first: no accounts, open straight into the app.
+        TabView {
+            DashboardView()
+                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
+            SpotsMapView()
+                .tabItem { Label("Map", systemImage: "map") }
+            CarListView()
+                .tabItem { Label("Cars", systemImage: "car") }
+        }
+        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
+            OnboardingView { hasCompletedOnboarding = true }
         }
     }
 }

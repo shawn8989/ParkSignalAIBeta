@@ -143,7 +143,6 @@ struct AnalysisConfirmationView: View {
             try context.save()
         } catch {
             // Non-fatal: tracking failed
-            print("Failed to set current parking / session: \(error)")
         }
     }
 

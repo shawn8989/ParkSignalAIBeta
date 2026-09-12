@@ -5,7 +5,6 @@ import CoreLocation
 import SwiftData
 
 struct SpotsMapView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.modelContext) private var context
     @Query private var spots: [ParkingSpot]
     @Query private var cars: [Car]
@@ -123,7 +122,6 @@ struct SpotsMapView: View {
             }
             .navigationDestination(item: $selectedSpot) { spot in
                 ParkingSpotDetailView(spot: spot, onUpdate: { _ in })
-                    .environmentObject(auth)
             }
             .sheet(isPresented: $showNewSpotPrompt) {
                 NavigationStack {

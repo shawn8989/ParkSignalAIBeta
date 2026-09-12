@@ -52,6 +52,7 @@ struct AlertsHubView: View {
                     }
                     .disabled(isRequesting)
 
+                    #if DEBUG
                     Button {
                         Task {
                             // Schedule a simple local notification after 5 seconds
@@ -79,6 +80,7 @@ struct AlertsHubView: View {
                     } label: {
                         Label("Test Alarm (10s)", systemImage: "alarm")
                     }
+                    #endif
                 }
 
                 // Navigation to detailed lists

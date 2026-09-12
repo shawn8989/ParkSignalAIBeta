@@ -9,7 +9,6 @@ import CoreLocation
 import SwiftData
 
 struct DashboardView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.modelContext) private var context
     @StateObject private var dataProvider = ParkingDataProvider.shared
 
@@ -49,9 +48,6 @@ struct DashboardView: View {
 
     // Scan sheets
     @State private var showQuickScan = false
-    @State private var showLiveScanner = false
-    @State private var liveScanResult: String = ""
-    @State private var showLiveResultSheet = false
 
     var body: some View {
         NavigationStack {
@@ -277,13 +273,6 @@ struct DashboardView: View {
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
-                    if auth.isAuthenticated {
-                        Button("Logout") { auth.logout() }
-                    } else if auth.isGuest {
-                        Button("Exit Guest") { auth.exitGuest() }
-                    }
-                }
             }
             .onAppear {
                 // Seed data if needed
@@ -339,33 +328,27 @@ struct DashboardView: View {
             .sheet(isPresented: $showQuickScan) {
                 QuickScanSheet()
             }
-            .sheet(isPresented: $showLiveResultSheet) {
-                QuickTextResultView(text: liveScanResult)
-            }
             .sheet(item: $editingSpot) { spot in
                 SpotEditView(spot: spot)
                     .environment(\.modelContext, context)
             }
             .navigationDestination(item: $selectedSpot) { spot in
                 ParkingSpotDetailView(spot: spot, onUpdate: { _ in })
-                    .environmentObject(auth)
             }
         }
     }
 
     private func seedIfNeeded() {
         guard !hasSeeded else { return }
+        // Demo spots are for development only and must never ship to users.
+        #if DEBUG
         if spots.isEmpty {
             for spot in MockData.parkingSpots {
                 context.insert(spot)
             }
-            do {
-                try context.save()
-            } catch {
-                print("HomeView: Failed to seed mock data: \(error)")
-                print("HomeView: Existing spots count after seed attempt: \(spots.count)")
-            }
+            try? context.save()
         }
+        #endif
         hasSeeded = true
     }
 
@@ -417,12 +400,10 @@ struct DashboardView: View {
             context.insert(newSpot)
             do {
                 try context.save()
-                print("HomeView: Saved spot id=\(newSpot.id) location=\(newSpot.location)")
                 // Center on the newly created spot
                 centerOnSpot(newSpot)
                 selectedSpot = newSpot
             } catch {
-                print("HomeView: Failed to save spot: \(error)")
                 locationAlertMessage = "Failed to save spot: \(error.localizedDescription)"
                 showingLocationAlert = true
             }
@@ -572,141 +553,6 @@ private struct OrientationPromptView: View {
                     }
                 }
             }
-        }
-    }
-}
-
-// Simple viewer for recognized text (from live scanner), with Copy action and analysis buttons.
-private struct QuickTextResultView: View {
-    let text: String
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var analysisOutput: String = ""
-    @State private var isAnalyzing: Bool = false
-
-    @State private var debugRequest: String = ""
-    @State private var debugResponse: String = ""
-    @State private var debugHTTPStatus: Int = 0
-    @State private var showDebug: Bool = false
-
-    private let aiService = AIAnalyzerService()
-    private let localParser = ParkingTextParser()
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                ScrollView {
-                    Text(text.isEmpty ? "No text detected." : text)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-
-                if isAnalyzing {
-                    HStack {
-                        ProgressView()
-                        Text("Analyzing…")
-                    }
-                    .padding(.horizontal)
-                }
-
-                if !analysisOutput.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Analysis Result")
-                            .font(.headline)
-                        ScrollView {
-                            Text(analysisOutput)
-                                .font(.footnote.monospaced())
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                        }
-                        .frame(maxHeight: 200)
-                    }
-                    .padding(.horizontal)
-                }
-
-                if !analysisOutput.isEmpty || !debugRequest.isEmpty {
-                    Toggle(isOn: $showDebug.animation()) {
-                        Label("Show Debug Details", systemImage: "ladybug")
-                    }
-                    .padding(.horizontal)
-                }
-
-                if showDebug {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Debug (HTTP \(debugHTTPStatus))")
-                            .font(.headline)
-                        Text("Request JSON:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        ScrollView { Text(debugRequest).font(.footnote.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(8) }
-                            .frame(maxHeight: 160)
-                        Text("Raw Response:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        ScrollView { Text(debugResponse).font(.footnote.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(8) }
-                            .frame(maxHeight: 200)
-                    }
-                    .padding(.horizontal)
-                }
-
-                HStack(spacing: 8) {
-                    Button {
-                        UIPasteboard.general.string = text
-                    } label: {
-                        Label("Copy", systemImage: "doc.on.doc")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Spacer()
-
-                    Button("Analyze (Local)") {
-                        Task { await analyzeLocal() }
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Analyze (AI)") {
-                        Task { await analyzeAI() }
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Done") { dismiss() }
-                        .buttonStyle(.bordered)
-                }
-                .padding()
-            }
-            .navigationTitle("Scan Result")
-        }
-    }
-
-    @MainActor
-    private func analyzeAI() async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        isAnalyzing = true
-        defer { isAnalyzing = false }
-        do {
-            let result = try await aiService.analyzeWithDebug(ocrText: trimmed)
-            analysisOutput = result.rawJSON
-            debugRequest = result.requestJSON
-            debugResponse = result.responseBody
-            debugHTTPStatus = result.httpStatus
-        } catch {
-            // Fallback to local parsing on failure
-            await analyzeLocal()
-        }
-    }
-
-    @MainActor
-    private func analyzeLocal() async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let local = localParser.analyze(ocrText: trimmed)
-        if let data = try? JSONEncoder().encode(local), let s = String(data: data, encoding: .utf8) {
-            analysisOutput = s
-        } else {
-            analysisOutput = String(describing: local)
         }
     }
 }

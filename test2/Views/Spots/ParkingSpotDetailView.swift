@@ -8,7 +8,6 @@ import MapKit
 import Combine
 
 struct ParkingSpotDetailView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -31,7 +30,6 @@ struct ParkingSpotDetailView: View {
 
     // Scan flow state
     @State private var showCamera = false
-    @State private var capturedImage: UIImage?
     @State private var isAnalyzing = false
     @State private var ocrText: String = ""
     @State private var analysis: AIAnalysisResponse?
@@ -85,7 +83,7 @@ struct ParkingSpotDetailView: View {
     @State private var pendingAlerts: [String: Date] = [:] // carID.uuidString -> next fire date
 
     private var currentUserID: UUID? {
-        auth.currentUser?.id
+        LocalIdentity.userID
     }
     
     private var spotCoordinate: CLLocationCoordinate2D {
@@ -167,8 +165,6 @@ struct ParkingSpotDetailView: View {
                 } label: {
                     Label("Add Restriction", systemImage: "plus")
                 }
-                .disabled(!auth.isAuthenticated)
-                .help(auth.isAuthenticated ? "Add a restriction" : "Login to add restrictions")
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -249,19 +245,16 @@ struct ParkingSpotDetailView: View {
                         try context.save()
                     } catch {
                         // In a real app, surface this to the user
-                        print("Failed to save restriction: \(error)")
                     }
                     onUpdate?(spot)
                     Task { await enrichFromCityData() }
                 },
                 sourceUser: currentUserID ?? UUID()
             )
-            .environmentObject(auth)
         }
         .sheet(isPresented: $showCamera) {
             CameraPicker { image in
                 // Prepare quick review without auto-saving
-                self.capturedImage = image
                 self.pendingQuickImage = image
                 self.showQuickReview = true
                 // Compute OCR preview asynchronously (non-blocking)
@@ -401,7 +394,6 @@ struct ParkingSpotDetailView: View {
                                     activeSpot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
                                 }
                                 if let lastScan {
-                                    try? await LocalStubBackendSyncService.shared.uploadRestrictions(for: lastScan, restrictions: createdRestrictions)
                                     await MainActor.run {
                                         // Link restrictions to this scan
                                         for r in createdRestrictions { r.scan = lastScan }
@@ -1211,46 +1203,10 @@ struct ParkingSpotDetailView: View {
     private func startScan() {
         scanError = nil
         isAnalyzing = false
-        capturedImage = nil
         ocrText = ""
         analysis = nil
         photoFilename = nil
         showCamera = true
-    }
-
-    @MainActor
-    private func processCapturedImage() async {
-        guard let image = capturedImage else { return }
-        isAnalyzing = true
-        defer { isAnalyzing = false }
-        do {
-            // Save image first to link to restrictions later
-            photoFilename = try ImageStore.saveJPEG(image)
-
-            // OCR (on-device)
-            let text = try await ocrService.recognizeText(in: image)
-            ocrText = text
-
-            spot.lastScanText = text
-            spot.lastScanPhotoFilename = photoFilename
-            spot.lastScanAt = Date()
-            try? context.save()
-
-            try await runParsing(for: text)
-        } catch {
-            scanError = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func processRecognizedText(_ text: String) async {
-        ocrText = text
-
-        spot.lastScanText = text
-        spot.lastScanAt = Date()
-        try? context.save()
-
-        await runParsing(for: text)
     }
 
     @MainActor
@@ -1283,31 +1239,12 @@ struct ParkingSpotDetailView: View {
         }
     }
 
-    private func startGenericParking() {
-        do {
-            // End any open generic ParkSession (no car) across all spots
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.endedAt == nil && s.car == nil { s.endedAt = Date() }
-
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: nil)
-            context.insert(session)
-            try context.save()
-
-            // Schedule notifications for this spot's restrictions
-            Task { await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot) }
-        } catch {
-            print("Failed to start parking: \(error)")
-        }
-    }
-
     private func endGenericParking() {
         do {
             let all = try context.fetch(FetchDescriptor<ParkSession>())
             for s in all where s.endedAt == nil && s.spot?.id == spot.id && s.car == nil { s.endedAt = Date() }
             try context.save()
         } catch {
-            print("Failed to end parking: \(error)")
         }
     }
     
