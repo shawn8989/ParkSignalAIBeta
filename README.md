@@ -1,152 +1,81 @@
-ParkSignal AI 🚦🤖
+# ParkSignal AI 🚦
 
-Real-time parking sign interpretation. Instant clarity. Zero tickets.
+**Read any parking sign in a tap. Know if you can park. Get an alarm before you have to move.**
 
-ParkSignal AI is an iOS app that analyzes parking signs using AI — both live and from photos — to reveal real-time rules, restrictions, and parking safety signals. Powered by SwiftUI, SwiftData, Apple Vision, CoreLocation, MapKit, and OpenAI.
+ParkSignal AI is an iOS app that reads parking signs with your camera and turns
+them into a clear, color-coded "can I park here?" signal — then saves the spot to
+a map and reminds you before a restriction starts.
 
-⸻
+It is **local-first and private**: v1 interprets signs **entirely on-device**
+(Apple Vision text recognition + an on-device rules parser). There are no
+accounts, and nothing you scan leaves your device. Optional iCloud sync keeps
+your own spots in step across your devices.
 
-✨ Core Features
+---
 
-🚦 ParkSignal Live (Real-Time Interpreter)
+## Features
 
-Hold your camera up to a parking sign and get instant understanding.
-	•	📷 Continuous live OCR
-	•	🧠 AI-powered interpretation
-	•	🔁 Deduped + stabilized text
-	•	🎨 Real-time parking signal (green/red/yellow/blue/purple/gray)
-	•	⚡ Immediate feedback — no saving in this mode
-	•	❗ CTA: “Capture Photos to Save This Sign”
+- **📸 Scan a sign** — photograph a parking sign; on-device OCR reads the text and
+  an on-device parser extracts the rules (days, time windows, limits, type).
+- **🎨 Parking signal** — a color tells you at a glance:
+  - 🟢 Safe to park · 🔴 Illegal now · 🟡 Restriction soon · 🔵 Permit/ADA ·
+    🟣 Metered/paid · ⚪ Unknown
+- **🗺️ Map of your spots** — each saved spot is a pin colored by its signal; tap
+  for rules, photos, and address.
+- **⏰ Alarms & reminders** — schedule an alert a chosen lead time before a
+  restriction begins (AlarmKit on iOS 26, local notifications otherwise).
+- **🚗 Cars & sessions** — track where each car is parked.
+- **☁️ Optional iCloud sync** — your data, synced across your own devices via the
+  CloudKit private database. No login; iCloud is the identity.
 
-📸 Sign Capture (Photo-Based Analysis)
+## Tech stack
 
-Capture and store sign data permanently.
-	•	📷 Take 1 or multiple photos (stacked/multiple signs)
-	•	👀 Review screen: Submit, Retake, Delete, Add More
-	•	💾 Only saves when user presses Submit
-	•	🔍 OCR + AI over all photos
-	•	🧩 Merged text + unified restrictions
-	•	📍 Saves address, location, signal, restrictions, photos
-	•	🗺️ Adds to map + scan history
+- **SwiftUI** app (iOS 18.6+), MVVM-ish view models
+- **SwiftData** for local persistence (+ optional CloudKit sync)
+- **Apple Vision / VisionKit** for on-device OCR
+- **CoreLocation + MapKit** for spots and the map
+- **AlarmKit** (iOS 26) with a UserNotifications fallback
 
-🧠 Multi-Photo Analysis Pipeline
-	•	OCR per image
-	•	Text merging
-	•	AI parsing
-	•	Clean, reliable restriction output
+No third-party services and no network calls to interpret signs in v1 — it all
+runs on the device.
 
-🎨 Color-Coded Parking Signals
-	•	🟢 Safe
-	•	🔴 Illegal now
-	•	🟡 Restriction starting soon
-	•	🔵 Permit/ADA only
-	•	🟣 Metered / paid
-	•	⚪ Unknown / incomplete
+## Project structure
 
-🛣️ Accurate Curb-Segment Logic
+```
+test2/
+├── App/          # App entry (ParkMateApp) and root navigation
+├── Models/       # SwiftData @Model types (ParkingSpot, Restriction, SignScan, …)
+├── Services/     # OCR, on-device parser, location, geocoding, alarms, notifications
+├── Utilities/    # Signal engine, date/geometry helpers, LocalIdentity
+└── Views/        # Home, Map, Cars, Scan, Spots, Alerts, Settings, Onboarding
+```
 
-Parking rules apply only to the correct curb segment:
-	•	Same side of street
-	•	Within a 10–20 meter radius
-	•	Opposite side = different rules
+(The Xcode target is named `test2` for historical reasons; the product is
+"ParkSignal AI", module `ParkSignal_AI`.)
 
-🗺️ Map Integration
-	•	Each SignScan becomes a map pin
-	•	Pin color = parking signal
-	•	Tap → see photos, rules, address
+## Building
 
-🕑 History & Detail
-	•	🖼️ Thumbnails
-	•	🔍 OCR text
-	•	📜 Parsed restrictions
-	•	📍 Address
-	•	🧭 Signal state
-	•	🕰️ Timestamp
+Open `test2.xcodeproj` in Xcode and run the `test2` scheme on an iOS 18+
+simulator or device. Unit tests: `⌘U` (or `xcodebuild test -scheme test2
+-only-testing:test2Tests`). CI builds and runs the unit tests on every PR.
 
-⸻
+To enable iCloud sync on a device, add the **iCloud (CloudKit)** and **Push
+Notifications** capabilities to the `test2` target with the container
+`iCloud.com.SOTech.ParkSignalAI`, and sign into iCloud on the device.
 
-🛠️ Technology Stack
+## Roadmap
 
-Platform
-	•	📱 iOS (SwiftUI, iOS 17+)
+- **Smart Scan (premium)** — optional higher-accuracy cloud interpretation via a
+  key-protected proxy, behind a subscription. (v1 is on-device only.)
+- Broader/authoritative city rule data
+- Richer history and multi-car workflows
+- App Store launch
 
-Core Tech
-	•	🧠 OpenAI API
-	•	🧰 SwiftUI
-	•	🗂️ SwiftData
-	•	👁️ Apple Vision (OCR)
-	•	📍 CoreLocation
-	•	🗺️ MapKit
-	•	🎥 Camera / AVCaptureSession
+## Privacy
 
-Architecture
-	•	MVVM
-	•	Modular features
-	•	Multi-photo OCR pipeline
-	•	SwiftData-backed SignScan repo
-	•	Real-time signal engine
+See [PRIVACY.md](PRIVACY.md). Short version: no tracking, no analytics, and no
+data leaves your device in v1.
 
-  📁 Project Structure
-  ParkSignalAI/
-│
-├── Models/
-│   ├── SignScan.swift
-│   ├── Restriction.swift
-│   └── RestrictionType.swift
-│
-├── Views/
-│   ├── ParkSignalLive/
-│   ├── SignCapture/
-│   ├── ScanHistory/
-│   └── Map/
-│
-├── Services/
-│   ├── OCRService.swift
-│   ├── AIParsingService.swift
-│   ├── LocationManager.swift
-│   └── BackendSyncService.swift
-│
-└── Utilities/
-    ├── ImageStore.swift
-    ├── SignalEngine.swift
-    └── DateUtilities.swift
+## License
 
-    
-⸻
-
-🗺️ Roadmap
-	•	Enhanced curb segment modeling
-	•	Background AI syncing
-	•	User accounts + cloud backup
-	•	Community scanning for reward points
-	•	Offline mode
-	•	Auto notifications for restrictions
-	•	App Store launch prep
-
-⸻
-
-🌟 Vision
-
-Parking signs shouldn’t feel like puzzles.
-
-ParkSignal AI translates the city’s confusing metal hieroglyphs into instant, simple truth.
-
-Zero confusion.
-Zero doubt.
-Zero tickets.
-
-⸻
-
-📄 License
-
-License TBD (MIT recommended).
-
-⸻
-
-🤝 Contributions
-
-Contributions welcome once core v1 is stable.
-
-END
-
-    
+TBD (MIT recommended).
