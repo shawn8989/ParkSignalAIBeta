@@ -32,12 +32,8 @@ final class AppNotificationDelegate: NSObject, UNUserNotificationCenterDelegate 
 struct ParkMateApp: App {
     init() {
         UNUserNotificationCenter.current().delegate = AppNotificationDelegate.shared
-        
-        NotificationCenter.default.addObserver(forName: Notification.Name("NotificationLog.Record"), object: nil, queue: .main) { notification in
-            // TODO: wire persistence of notification logs
-        }
     }
-    
+
     var body: some Scene {
         WindowGroup {
             RootView()

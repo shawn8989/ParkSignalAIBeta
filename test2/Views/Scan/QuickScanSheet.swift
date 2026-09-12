@@ -18,7 +18,6 @@ struct QuickScanSheet: View {
     @State private var isAnalyzing = false
     @State private var recognizedText: String = ""
     @State private var errorMessage: String?
-    @State private var analysisOutput: String = ""
     @State private var signalStatus: ParkingSignalStatus = .gray
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
@@ -154,26 +153,12 @@ struct QuickScanSheet: View {
                                     try? context.save()
                                 }
 
-                                // Run AI pipeline (fallback to local) and attach restrictions to scan and spot
+                                // Run AI pipeline (fallback to on-device parser) and attach restrictions to scan and spot
                                 var parsed: AIAnalysisResponse
                                 do {
-                                    let result = try await aiService.analyzeWithDebug(ocrText: mergedText)
-                                    parsed = result.parsed
-                                    await MainActor.run {
-                                        if let data = try? JSONEncoder().encode(parsed), let json = String(data: data, encoding: .utf8) {
-                                            analysisOutput = json
-                                        }
-                                    }
+                                    parsed = try await aiService.analyze(ocrText: mergedText).parsed
                                 } catch {
-                                    let local = localParser.analyze(ocrText: mergedText)
-                                    parsed = local
-                                    await MainActor.run {
-                                        if let data = try? JSONEncoder().encode(local), let json = String(data: data, encoding: .utf8) {
-                                            analysisOutput = json
-                                        } else {
-                                            analysisOutput = String(describing: local)
-                                        }
-                                    }
+                                    parsed = localParser.analyze(ocrText: mergedText)
                                 }
 
                                 // Map AIRestriction -> Restriction models, attach to scan and spot
@@ -299,43 +284,14 @@ struct QuickScanSheet: View {
         isAnalyzing = true
         errorMessage = nil
         defer { isAnalyzing = false }
-        do {
-            if useAI {
-                do {
-                    let result = try await aiService.analyze(ocrText: recognizedText)
-                    analysisOutput = result.rawJSON
-                    let parsed = try? JSONDecoder().decode(AIAnalysisResponse.self, from: Data(analysisOutput.utf8))
-                    if let parsed {
-                        signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
-                    }
-                } catch {
-                    // Fallback to local if AI fails
-                    let local = localParser.analyze(ocrText: recognizedText)
-                    if let data = try? JSONEncoder().encode(local), let s = String(data: data, encoding: .utf8) {
-                        analysisOutput = s
-                        let parsed = try? JSONDecoder().decode(AIAnalysisResponse.self, from: Data(s.utf8))
-                        if let parsed {
-                            signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
-                        }
-                    } else {
-                        analysisOutput = String(describing: local)
-                    }
-                }
-            } else {
-                let local = localParser.analyze(ocrText: recognizedText)
-                if let data = try? JSONEncoder().encode(local), let s = String(data: data, encoding: .utf8) {
-                    analysisOutput = s
-                    let parsed = try? JSONDecoder().decode(AIAnalysisResponse.self, from: Data(s.utf8))
-                    if let parsed {
-                        signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
-                    }
-                } else {
-                    analysisOutput = String(describing: local)
-                }
-            }
-        } catch {
-            errorMessage = error.localizedDescription
+
+        let parsed: AIAnalysisResponse
+        if useAI, let aiResult = try? await aiService.analyze(ocrText: recognizedText) {
+            parsed = aiResult.parsed
+        } else {
+            parsed = localParser.analyze(ocrText: recognizedText)
         }
+        signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
     }
 
 }

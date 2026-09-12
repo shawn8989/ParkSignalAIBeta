@@ -30,7 +30,6 @@ struct ParkingSpotDetailView: View {
 
     // Scan flow state
     @State private var showCamera = false
-    @State private var capturedImage: UIImage?
     @State private var isAnalyzing = false
     @State private var ocrText: String = ""
     @State private var analysis: AIAnalysisResponse?
@@ -256,7 +255,6 @@ struct ParkingSpotDetailView: View {
         .sheet(isPresented: $showCamera) {
             CameraPicker { image in
                 // Prepare quick review without auto-saving
-                self.capturedImage = image
                 self.pendingQuickImage = image
                 self.showQuickReview = true
                 // Compute OCR preview asynchronously (non-blocking)
@@ -1205,7 +1203,6 @@ struct ParkingSpotDetailView: View {
     private func startScan() {
         scanError = nil
         isAnalyzing = false
-        capturedImage = nil
         ocrText = ""
         analysis = nil
         photoFilename = nil
