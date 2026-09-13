@@ -101,56 +101,49 @@ struct QuickScanSheet: View {
                         image: img,
                         ocrPreview: pendingOCRPreview,
                         onSubmit: { mergedText, filenames in
-                            Task {
+                            Task { @MainActor in
                                 // Resolve current coordinate and address
                                 let coord = locationManager.lastLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
                                 let geocoder = GeocodingService()
                                 let address = await geocoder.reverseGeocode(coordinate: coord)
 
-                                // Use SpotMergeService to find or create spot
-                                let spot = await MainActor.run { () -> ParkingSpot in
-                                    let preferredSide = DrivingSide.storedSide(from: "with")
-                                    return SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
-                                }
+                                // Find or create the spot (on the main actor)
+                                let preferredSide = DrivingSide.storedSide(from: "with")
+                                let spot = SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
 
                                 // Insert SignScan attached to the spot
-                                let scan = await MainActor.run { () -> SignScan in
-                                    let scan = SignScan(
-                                        latitude: coord.latitude,
-                                        longitude: coord.longitude,
-                                        ocrText: mergedText,
-                                        createdAt: Date(),
-                                        photoFilename: filenames.first,
-                                        additionalPhotoFilenames: Array(filenames.dropFirst()),
-                                        photoFilenames: filenames,
-                                        mergedOCRText: mergedText,
-                                        address: address.isEmpty ? nil : address,
-                                        status: "incomplete",
-                                        segmentCenterLat: coord.latitude,
-                                        segmentCenterLon: coord.longitude,
-                                        segmentRadius: 15.0,
-                                        segmentStreetSide: spot.streetSide
-                                    )
-                                    context.insert(scan)
-                                    spot.attach(scan: scan)
-                                    try? context.save()
-                                    return scan
-                                }
+                                let scan = SignScan(
+                                    latitude: coord.latitude,
+                                    longitude: coord.longitude,
+                                    ocrText: mergedText,
+                                    createdAt: Date(),
+                                    photoFilename: filenames.first,
+                                    additionalPhotoFilenames: Array(filenames.dropFirst()),
+                                    photoFilenames: filenames,
+                                    mergedOCRText: mergedText,
+                                    address: address.isEmpty ? nil : address,
+                                    status: "incomplete",
+                                    segmentCenterLat: coord.latitude,
+                                    segmentCenterLon: coord.longitude,
+                                    segmentRadius: 15.0,
+                                    segmentStreetSide: spot.streetSide
+                                )
+                                context.insert(scan)
+                                spot.attach(scan: scan)
+                                try? context.save()
 
                                 // Assign to nearest segment on the same side (or create)
-                                await MainActor.run {
-                                    let allScans = (try? context.fetch(FetchDescriptor<SignScan>())) ?? []
-                                    let loc = CLLocationCoordinate2D(latitude: scan.latitude, longitude: scan.longitude)
-                                    _ = SegmentManager.assign(
-                                        scan: scan,
-                                        existingScans: allScans.filter { $0.id != scan.id },
-                                        currentLocation: loc,
-                                        heading: scan.heading,
-                                        preferredSide: StreetSide(rawValue: spot.streetSide.lowercased()),
-                                        defaultRadius: 15.0
-                                    )
-                                    try? context.save()
-                                }
+                                let allScans = (try? context.fetch(FetchDescriptor<SignScan>())) ?? []
+                                let loc = CLLocationCoordinate2D(latitude: scan.latitude, longitude: scan.longitude)
+                                _ = SegmentManager.assign(
+                                    scan: scan,
+                                    existingScans: allScans.filter { $0.id != scan.id },
+                                    currentLocation: loc,
+                                    heading: scan.heading,
+                                    preferredSide: StreetSide(rawValue: spot.streetSide.lowercased()),
+                                    defaultRadius: 15.0
+                                )
+                                try? context.save()
 
                                 // Run AI pipeline (fallback to on-device parser) and attach restrictions to scan and spot
                                 var parsed: AIAnalysisResponse

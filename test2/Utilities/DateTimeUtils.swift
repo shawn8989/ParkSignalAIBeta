@@ -6,7 +6,7 @@ import Foundation
 /// - Weekday indices follow the project convention: 0 = Sunday ... 6 = Saturday.
 /// - Overnight windows are handled by adding 24h to the end if `end <= start` for the same day.
 /// - All functions are pure and thread-safe.
-enum DateTimeUtils {
+nonisolated enum DateTimeUtils {
     /// Parse a string in the form "HH:mm" into hour/minute.
     /// Returns nil for invalid or out-of-range input.
     static func parseHHmm(_ s: String) -> (hour: Int, minute: Int)? {

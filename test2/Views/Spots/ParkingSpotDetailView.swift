@@ -267,16 +267,14 @@ struct ParkingSpotDetailView: View {
                     image: img,
                     ocrPreview: pendingQuickOCRText,
                     onSubmit: { mergedText, filenames in
-                        Task {
+                        Task { @MainActor in
                             // Resolve coordinate and reverse geocode to an address label
                             let coord = currentDeviceCoordinate() ?? spotCoordinate
                             let address = await reverseGeocode(coord)
 
-                            // Find or create a ParkingSpot by normalized address
-                            let targetSpot: ParkingSpot = await MainActor.run {
-                                let preferredSide = spot.streetSide
-                                return SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
-                            }
+                            // Find or create a ParkingSpot by normalized address (main actor)
+                            let preferredSide = spot.streetSide
+                            let targetSpot = SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
 
                             // Insert SignScan attached to the targetSpot
                             await MainActor.run {
@@ -372,18 +370,14 @@ struct ParkingSpotDetailView: View {
                         analysis: analysis,
                         onFinished: { createdRestrictions in
                             onUpdate?(spot)
-                            Task {
+                            Task { @MainActor in
                                 let activeSpot = analysisSpotOverride ?? spot
-                                // Fetch alarms off the main actor
+                                // Fetch alarms (async) then record their ids
                                 let alarms = await AlarmService.shared.allAlarms()
-                                await MainActor.run {
-                                    activeSpot.alarmIDs = alarms.map { $0.id }
-                                    try? context.save()
-                                }
+                                activeSpot.alarmIDs = alarms.map { $0.id }
+                                try? context.save()
                                 // Upload only the newly confirmed restrictions
-                                let lastScan: SignScan? = await MainActor.run {
-                                    activeSpot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
-                                }
+                                let lastScan: SignScan? = activeSpot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
                                 if let lastScan {
                                     await MainActor.run {
                                         // Link restrictions to this scan
