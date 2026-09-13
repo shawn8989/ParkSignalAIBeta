@@ -320,7 +320,7 @@ struct SpotsMapView: View {
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            var start = todayAt(hour: sh, minute: sm, ref: now)
+            let start = todayAt(hour: sh, minute: sm, ref: now)
             var end = todayAt(hour: eh, minute: em, ref: now)
             if end <= start { end = end.addingTimeInterval(24*60*60) }
             if now >= start && now <= end {

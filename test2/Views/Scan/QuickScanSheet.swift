@@ -106,7 +106,6 @@ struct QuickScanSheet: View {
                                 let coord = locationManager.lastLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
                                 let geocoder = GeocodingService()
                                 let address = await geocoder.reverseGeocode(coordinate: coord)
-                                let label = address.isEmpty ? String(format: "%.5f, %.5f", coord.latitude, coord.longitude) : address
 
                                 // Use SpotMergeService to find or create spot
                                 let spot = await MainActor.run { () -> ParkingSpot in
@@ -183,7 +182,7 @@ struct QuickScanSheet: View {
                                                 return (s, e)
                                             }
                                             if let sHM = DateTimeUtils.parseHHmm(r.startTime), let eHM = DateTimeUtils.parseHHmm(r.endTime) {
-                                                var s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
+                                                let s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
                                                 var e = DateTimeUtils.todayAt(hour: eHM.0, minute: eHM.1)
                                                 if e <= s { e = e.addingTimeInterval(24 * 60 * 60) }
                                                 return (s, e)

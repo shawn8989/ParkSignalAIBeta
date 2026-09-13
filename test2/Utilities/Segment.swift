@@ -152,7 +152,7 @@ struct SegmentManager {
         // Determine side preference
         let side = resolveSide(preferred: preferredSide, scanSpotSide: scan.spot?.streetSide)
         // Build segments from existing scans
-        var segs = segments(from: existingScans)
+        let segs = segments(from: existingScans)
         
         // Infer a direction if none provided, to enable curb-aligned rendering
         var inferredDirection = heading
