@@ -53,6 +53,7 @@ struct SignScanEditView: View {
                         Image(systemName: "mappin.and.ellipse")
                         Text(resolvedAddress ?? scan.address ?? String(format: "%.5f, %.5f", scan.latitude, scan.longitude))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Spacer()
                         Image(systemName: "chevron.right").foregroundColor(.secondary)
                     }
