@@ -76,25 +76,26 @@ final class NotificationManager {
         }
     }
 
-    /// Cancel any pending weekly notifications previously scheduled for the given restrictions at this spot.
-    /// Uses the same identifier scheme as `schedule(for:spot:)` ("restriction.<restrictionID>.<weekday1_7>").
-    /// We recompute the alert weekday using the same lead-time logic to derive exact identifiers to remove.
+    /// Cancel any pending weekly notifications previously scheduled for the given restrictions.
     func cancel(for restrictions: [Restriction], spot: ParkingSpot) async {
+        await cancel(forRestrictionIDs: restrictions.map { $0.id })
+    }
+
+    /// Cancel all pending weekly notifications for the given restriction IDs by matching the
+    /// "restriction.<id>." identifier prefix. This is robust even when the restriction's days,
+    /// time, or the user's lead time changed since it was scheduled (so no weekday entry is
+    /// orphaned), and it works after the Restriction model has already been deleted.
+    func cancel(forRestrictionIDs ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
         let center = UNUserNotificationCenter.current()
-        // Build the exact identifiers we used when scheduling.
-        var ids: [String] = []
-        for r in restrictions {
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: r.startTime)
-            let startHour = comps.hour ?? 0
-            let startMinute = comps.minute ?? 0
-            for dow in r.daysOfWeek {
-                let lead = computeLead(weekday0_6: dow, startHour: startHour, startMinute: startMinute, leadMinutes: leadMinutes)
-                let id = "restriction.\(r.id.uuidString).\(lead.weekday1_7)"
-                ids.append(id)
-            }
+        let prefixes = ids.map { "restriction.\($0.uuidString)." }
+        let pending = await center.pendingNotificationRequests()
+        let toRemove = pending.map { $0.identifier }.filter { identifier in
+            prefixes.contains { identifier.hasPrefix($0) }
         }
-        // Remove any matching pending requests. Best-effort; safe to call even if none exist.
-        center.removePendingNotificationRequests(withIdentifiers: ids)
+        if !toRemove.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: toRemove)
+        }
     }
 
     private func title(for r: Restriction) -> String {

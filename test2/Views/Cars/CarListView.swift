@@ -515,7 +515,10 @@ struct CarListView: View {
     }
 
     private func scheduleNextRestrictionNotification(for car: Car, at spot: ParkingSpot) {
-        guard let next = nextRestrictionDate(for: spot) else { return }
+        guard let start = nextRestrictionDate(for: spot) else { return }
+        // Fire the alert the user's lead time BEFORE the restriction starts (not at start).
+        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
+        let next = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
         let center = UNUserNotificationCenter.current()
         let id = "nextRestriction.car.\(car.id.uuidString).spot.\(spot.id.uuidString)"
         center.removePendingNotificationRequests(withIdentifiers: [id])
@@ -562,7 +565,14 @@ struct CarListView: View {
     }
 
     private func cancelNextRestrictionNotification(for car: Car) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextRestriction.car.\(car.id.uuidString)"])
+        // Scheduled ids are "nextRestriction.car.<carID>.spot.<spotID>", so match by prefix
+        // (the old exact id without the ".spot." suffix never matched anything).
+        let center = UNUserNotificationCenter.current()
+        let prefix = "nextRestriction.car.\(car.id.uuidString).spot."
+        center.getPendingNotificationRequests { reqs in
+            let ids = reqs.map { $0.identifier }.filter { $0.hasPrefix(prefix) }
+            if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
+        }
     }
 
     private func saveLastUsed(_ car: Car) {
