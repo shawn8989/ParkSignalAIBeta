@@ -76,7 +76,7 @@ enum ParkingEligibilityEvaluator {
         let cal = Calendar.current
         let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
         guard r.daysOfWeek.isEmpty || r.daysOfWeek.contains(weekday0_6) else { return false }
-        var start = DateTimeUtils.todayAt(hour: cal.component(.hour, from: r.startTime), minute: cal.component(.minute, from: r.startTime), ref: now)
+        let start = DateTimeUtils.todayAt(hour: cal.component(.hour, from: r.startTime), minute: cal.component(.minute, from: r.startTime), ref: now)
         var end = DateTimeUtils.todayAt(hour: cal.component(.hour, from: r.endTime), minute: cal.component(.minute, from: r.endTime), ref: now)
         if end <= start { end = end.addingTimeInterval(24*60*60) }
         return now >= start && now <= end
@@ -87,7 +87,7 @@ enum ParkingEligibilityEvaluator {
         let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
         guard r.daysOfWeek.isEmpty || r.daysOfWeek.contains(weekday0_6) else { return false }
         guard let s = DateTimeUtils.parseHHmm(r.startTime), let e = DateTimeUtils.parseHHmm(r.endTime) else { return false }
-        var start = DateTimeUtils.todayAt(hour: s.0, minute: s.1, ref: now)
+        let start = DateTimeUtils.todayAt(hour: s.0, minute: s.1, ref: now)
         var end = DateTimeUtils.todayAt(hour: e.0, minute: e.1, ref: now)
         if end <= start { end = end.addingTimeInterval(24*60*60) }
         return now >= start && now <= end

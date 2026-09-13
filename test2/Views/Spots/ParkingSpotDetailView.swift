@@ -271,9 +271,6 @@ struct ParkingSpotDetailView: View {
                             // Resolve coordinate and reverse geocode to an address label
                             let coord = currentDeviceCoordinate() ?? spotCoordinate
                             let address = await reverseGeocode(coord)
-                            let label = (address ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? String(format: "%.5f, %.5f", coord.latitude, coord.longitude)
-                                : address!
 
                             // Find or create a ParkingSpot by normalized address
                             let targetSpot: ParkingSpot = await MainActor.run {
@@ -282,7 +279,7 @@ struct ParkingSpotDetailView: View {
                             }
 
                             // Insert SignScan attached to the targetSpot
-                            let scan = await MainActor.run { () -> SignScan in
+                            await MainActor.run {
                                 let scan = SignScan(
                                     latitude: coord.latitude,
                                     longitude: coord.longitude,
@@ -318,7 +315,6 @@ struct ParkingSpotDetailView: View {
 
                                 try? context.save()
                                 showToast(message: "Scan saved. Analyzing…")
-                                return scan
                             }
 
                             // Track the correct spot for analysis result attachment and offer editing
@@ -941,7 +937,7 @@ struct ParkingSpotDetailView: View {
                     }
                 }
 
-                if let segLat = last.segmentCenterLat, let segLon = last.segmentCenterLon {
+                if last.segmentCenterLat != nil, last.segmentCenterLon != nil {
                     HStack(spacing: 8) {
                         Image(systemName: "square.grid.2x2")
                         Text("Segment: \(last.segmentStreetSide?.capitalized ?? "?") • radius ~\(Int(last.segmentRadius ?? 15))m")

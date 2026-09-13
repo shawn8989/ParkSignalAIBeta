@@ -31,7 +31,7 @@ extension ParkingSpot {
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            var start = DateTimeUtils.todayAt(hour: sh, minute: sm, ref: now, calendar: cal)
+            let start = DateTimeUtils.todayAt(hour: sh, minute: sm, ref: now, calendar: cal)
             var end = DateTimeUtils.todayAt(hour: eh, minute: em, ref: now, calendar: cal)
             if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
             if now >= start && now <= end {

@@ -120,7 +120,7 @@ struct ParkingSignalEvaluator {
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            var start = todayAt(hour: sh, minute: sm, ref: now)
+            let start = todayAt(hour: sh, minute: sm, ref: now)
             var end = todayAt(hour: eh, minute: em, ref: now)
             if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
             return (now >= start && now <= end)
@@ -181,7 +181,7 @@ struct ParkingSignalEvaluator {
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            var start = todayAt(hour: sh, minute: sm, ref: now)
+            let start = todayAt(hour: sh, minute: sm, ref: now)
             var end = todayAt(hour: eh, minute: em, ref: now)
             if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
             return (now >= start && now <= end)
@@ -227,7 +227,7 @@ struct ParkingSignalEvaluator {
             // Duration-only restrictions are treated as active now if durationMinutes > 0 (time-limited parking)
             if let dur = r.durationMinutes, dur > 0 { return true }
             guard let s = parseHHmm(r.startTime), let e = parseHHmm(r.endTime) else { return false }
-            var start = todayAt(s.0, s.1, ref: now)
+            let start = todayAt(s.0, s.1, ref: now)
             var end = todayAt(e.0, e.1, ref: now)
             if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
             return (now >= start && now <= end)

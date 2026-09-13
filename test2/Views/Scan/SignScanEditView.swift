@@ -293,7 +293,7 @@ struct SignScanEditView: View {
                         return (s, e)
                     }
                     if let sHM = DateTimeUtils.parseHHmm(r.startTime), let eHM = DateTimeUtils.parseHHmm(r.endTime) {
-                        var s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
+                        let s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
                         var e = DateTimeUtils.todayAt(hour: eHM.0, minute: eHM.1)
                         if e <= s { e = e.addingTimeInterval(24 * 60 * 60) }
                         return (s, e)
@@ -327,7 +327,7 @@ struct SignScanEditView: View {
             scan.signalState = status.rawValue
             scan.status = "complete"
             scan.analyzedAt = now
-            try? modelContext.save()
+            try modelContext.save()
 
             // Schedule alarms/notifications for the spot if linked
             if let spot = scan.spot {

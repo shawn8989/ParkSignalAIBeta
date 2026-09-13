@@ -9,7 +9,7 @@ enum DrivingSide {
 
     /// Returns true if the current region drives on the right side of the road.
     static var isRightHandTraffic: Bool {
-        let region = Locale.current.region?.identifier.uppercased() ?? Locale.current.regionCode?.uppercased() ?? "US"
+        let region = Locale.current.region?.identifier.uppercased() ?? "US"
         return !leftHandTrafficRegions.contains(region)
     }
 

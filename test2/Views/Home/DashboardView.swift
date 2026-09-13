@@ -356,7 +356,7 @@ struct DashboardView: View {
     private func handleSaveCurrentSpotTapped() {
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
-            guard let loc = locationManager.lastLocation else {
+            guard locationManager.lastLocation != nil else {
                 locationAlertMessage = "Current location not available yet. Please wait a moment and try again."
                 showingLocationAlert = true
                 return

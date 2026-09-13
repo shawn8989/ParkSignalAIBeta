@@ -431,7 +431,7 @@ struct CarListView: View {
         saveLastUsed(car)
 
         // Cancel any previously scheduled weekly notifications for the last spot of this car (best-effort)
-        if let spot = car.activeSession?.spot { // if still active (shouldn't be), skip cancel
+        if car.activeSession?.spot != nil { // if still active (shouldn't be), skip cancel
         } else {
             // We don't know the last spot directly; as a simple approach, cancel for all spots with active sessions ended now
             // (In a future refactor, track CurrentParking to know the last spot directly.)

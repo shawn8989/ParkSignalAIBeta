@@ -471,7 +471,7 @@ private struct ColorSwatch: View {
 
 private extension UIColor {
     convenience init(hex: String) {
-        var s = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        let s = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int = UInt64()
         Scanner(string: s).scanHexInt64(&int)
         let a, r, g, b: UInt64
