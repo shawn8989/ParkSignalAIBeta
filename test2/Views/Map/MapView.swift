@@ -361,7 +361,7 @@ struct MapView: View {
                 }
             }
             // Recenter when the user coordinate changes
-            .onChange(of: MapCoordinateProxy(userCoordinate)) { coord in
+            .onChange(of: MapCoordinateProxy(userCoordinate)) { _, coord in
                 guard let lat = coord.latitude, let lon = coord.longitude else { return }
                 center(on: CLLocationCoordinate2D(latitude: lat, longitude: lon), span: 0.01)
             }

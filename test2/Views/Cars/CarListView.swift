@@ -371,7 +371,7 @@ struct CarListView: View {
             .onDisappear {
                 locationManager.stopUpdatingLocation()
             }
-            .onChange(of: locationManager.authorizationStatus) { newValue in
+            .onChange(of: locationManager.authorizationStatus) { _, newValue in
                 if newValue == .authorizedWhenInUse || newValue == .authorizedAlways {
                     locationManager.startUpdatingLocation()
                 }

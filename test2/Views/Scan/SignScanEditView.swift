@@ -65,7 +65,7 @@ struct SignScanEditView: View {
                     Text("Right").tag(StreetSide.right)
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: segSide) { newValue in
+                .onChange(of: segSide) { _, newValue in
                     scan.segmentStreetSide = newValue.rawValue
                 }
 
@@ -76,13 +76,13 @@ struct SignScanEditView: View {
                     Spacer()
                 }
                 Slider(value: $segRadius, in: 5...50, step: 1)
-                    .onChange(of: segRadius) { newValue in
+                    .onChange(of: segRadius) { _, newValue in
                         scan.segmentRadius = newValue
                     }
 
                 // Direction controls
                 Toggle("Specify Direction", isOn: $segHasDirection)
-                    .onChange(of: segHasDirection) { on in
+                    .onChange(of: segHasDirection) { _, on in
                         if on {
                             scan.segmentDirection = CurbGeometry.normalizedHeading(segDirection)
                         } else {
@@ -97,7 +97,7 @@ struct SignScanEditView: View {
                         Spacer()
                     }
                     Slider(value: $segDirection, in: 0...360, step: 1)
-                        .onChange(of: segDirection) { newValue in
+                        .onChange(of: segDirection) { _, newValue in
                             scan.segmentDirection = CurbGeometry.normalizedHeading(newValue)
                         }
                 } else {
