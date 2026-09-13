@@ -1,7 +1,9 @@
 import Foundation
 
 // Allowed types: street_cleaning, no_parking, metered, permit, other
-enum AIRestrictionType: String, Codable {
+// Pure Codable value types — opt out of the target's default main-actor isolation
+// so their Codable conformance can be used off the main actor (e.g. background JSON decode).
+nonisolated enum AIRestrictionType: String, Codable {
     case street_cleaning
     case no_parking
     case metered
@@ -9,7 +11,7 @@ enum AIRestrictionType: String, Codable {
     case other
 }
 
-struct AIRestriction: Codable {
+nonisolated struct AIRestriction: Codable {
     let type: AIRestrictionType
     let daysOfWeek: [Int]          // Sunday = 0 ... Saturday = 6
     let startTime: String          // "HH:mm" 24h local (use "00:00" if not applicable)
@@ -18,6 +20,6 @@ struct AIRestriction: Codable {
     let durationMinutes: Int?      // e.g., 180 for "3 HOUR PARKING"; nil if not a time limit
 }
 
-struct AIAnalysisResponse: Codable {
+nonisolated struct AIAnalysisResponse: Codable {
     let restrictions: [AIRestriction]
 }

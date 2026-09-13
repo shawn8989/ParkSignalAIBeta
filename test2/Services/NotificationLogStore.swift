@@ -34,17 +34,21 @@ final class NotificationLogStore: ObservableObject {
                 return
             }
             
-            switch event {
-            case "delivered":
-                if let unNotification = userInfo["notification"] as? UNNotification {
-                    self.appendDelivered(from: unNotification)
+            // The observer is registered on the .main queue, so this closure runs on
+            // the main thread; assume main-actor isolation to call the store's methods.
+            MainActor.assumeIsolated {
+                switch event {
+                case "delivered":
+                    if let unNotification = userInfo["notification"] as? UNNotification {
+                        self.appendDelivered(from: unNotification)
+                    }
+                case "responded":
+                    if let unResponse = userInfo["response"] as? UNNotificationResponse {
+                        self.appendResponse(unResponse)
+                    }
+                default:
+                    break
                 }
-            case "responded":
-                if let unResponse = userInfo["response"] as? UNNotificationResponse {
-                    self.appendResponse(unResponse)
-                }
-            default:
-                break
             }
         }
     }
