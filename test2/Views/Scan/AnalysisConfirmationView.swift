@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// Confirm (and CORRECT) the parsed restrictions before they are saved and
+/// alarms are scheduled. Each row is editable — type, days, and times — so a
+/// wrong on-device/AI interpretation can be fixed here instead of scheduling a
+/// bad alarm. Low-confidence parses are flagged for the user to double-check.
 struct AnalysisConfirmationView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -12,61 +16,54 @@ struct AnalysisConfirmationView: View {
     let analysis: AIAnalysisResponse
     var onFinished: (([Restriction]) -> Void)? = nil
 
-    @State private var includeFlags: [Bool] = []
-    @State private var cannotParkNow: Bool = false
+    @State private var items: [EditableRestriction] = []
     @State private var setAsCurrentParking: Bool = true
     @State private var saveError: String?
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
+    private struct EditableRestriction: Identifiable {
+        let id = UUID()
+        var include: Bool
+        var type: RestrictionType
+        var days: Set<Int>
+        var startTime: Date
+        var endTime: Date
+        var durationMinutes: Int?
+        var notes: String?
+        var needsReview: Bool
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
-                HStack(spacing: 10) {
-                    Image(systemName: status.iconName).foregroundStyle(status.color)
-                        .accessibilityHidden(true)
-                    Text(status.label).font(.subheadline)
-                    Spacer()
-                }
-                .padding(8)
-                .background(status.color.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                statusBanner
 
-                if cannotParkNow {
+                if items.contains(where: { $0.include && $0.needsReview }) {
                     HStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.yellow)
-                        Text("You can’t park here right now based on the detected restrictions.")
+                            .foregroundStyle(.orange)
+                            .accessibilityHidden(true)
+                        Text("Some detections may be off — please double-check the days and times below before saving.")
                             .font(.subheadline)
-                            .foregroundColor(.primary)
                     }
                 }
 
-                Section(header: Text("Detected Restrictions")) {
-                    ForEach(analysis.restrictions.indices, id: \.self) { idx in
-                        let r = analysis.restrictions[idx]
-                        Toggle(isOn: bindingForIncludeFlag(idx)) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(title(for: r.type))
-                                    .font(.headline)
-                                Text("\(daysDescription(r.daysOfWeek)) • \(r.startTime) - \(r.endTime)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                if let notes = r.notes, !notes.isEmpty {
-                                    Text(notes)
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
+                Section {
+                    ForEach($items) { $item in
+                        editableRow($item)
                     }
+                    .onDelete { items.remove(atOffsets: $0) }
+                } header: {
+                    Text("Detected Restrictions")
+                } footer: {
+                    Text("Tap a field to correct anything the scan got wrong before saving.")
                 }
 
                 Section {
                     Toggle(isOn: $setAsCurrentParking) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Set as current parking location")
-                            Text("Only schedule alerts and timers for where your car is currently parked. You can change this later by scanning at a different spot.")
+                            Text("Only schedule alerts for where your car is currently parked. You can change this later by scanning at a different spot.")
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
@@ -79,18 +76,14 @@ struct AnalysisConfirmationView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save & Schedule") {
-                        Task { await saveAndSchedule() }
-                    }
-                    .disabled(!includeFlags.contains(true))
+                    Button("Save & Schedule") { Task { await saveAndSchedule() } }
+                        .disabled(!items.contains { $0.include })
                 }
             }
             .onAppear {
-                includeFlags = Array(repeating: true, count: analysis.restrictions.count)
-                cannotParkNow = computeCannotParkNow()
-            }
-            .onChange(of: analysis.restrictions.count) { _, newCount in
-                includeFlags = Array(repeating: true, count: newCount)
+                if items.isEmpty {
+                    items = analysis.restrictions.map(editable(from:))
+                }
             }
             .alert("Couldn't Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -99,88 +92,129 @@ struct AnalysisConfirmationView: View {
             }
         }
     }
-    
-    private func bindingForIncludeFlag(_ idx: Int) -> Binding<Bool> {
-        Binding(
-            get: {
-                if idx < includeFlags.count { return includeFlags[idx] }
-                return true
-            },
-            set: { newValue in
-                if idx < includeFlags.count {
-                    includeFlags[idx] = newValue
-                } else {
-                    if includeFlags.count < idx {
-                        includeFlags.append(contentsOf: Array(repeating: true, count: idx - includeFlags.count))
+
+    // MARK: - Rows
+
+    @ViewBuilder
+    private func editableRow(_ item: Binding<EditableRestriction>) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Toggle("Include", isOn: item.include).labelsHidden()
+                Picker("Type", selection: item.type) {
+                    ForEach(RestrictionType.allCases, id: \.self) { t in
+                        Text(t.displayName).tag(t)
                     }
-                    includeFlags.append(newValue)
+                }
+                .pickerStyle(.menu)
+                Spacer()
+                if item.wrappedValue.needsReview {
+                    Label("Check", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
                 }
             }
-        )
+
+            if item.wrappedValue.include {
+                if item.wrappedValue.durationMinutes == nil {
+                    dayChips(item.days)
+                    HStack(spacing: 8) {
+                        DatePicker("Start", selection: item.startTime, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        Text("–").foregroundStyle(.secondary)
+                        DatePicker("End", selection: item.endTime, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        Spacer()
+                    }
+                } else {
+                    Text("Time limit: \(item.wrappedValue.durationMinutes ?? 0) min from arrival")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let notes = item.wrappedValue.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 
-    private func setCurrentParking(to spot: ParkingSpot) {
-        do {
-            // Update or insert CurrentParking
-            let currentFetch = FetchDescriptor<CurrentParking>()
-            let existingCurrent = try context.fetch(currentFetch)
-            if let first = existingCurrent.first {
-                first.spotID = spot.id
-                first.parkedAt = Date()
-            } else {
-                let current = CurrentParking(spotID: spot.id, parkedAt: Date())
-                context.insert(current)
+    @ViewBuilder
+    private func dayChips(_ days: Binding<Set<Int>>) -> some View {
+        let symbols = ["S", "M", "T", "W", "T", "F", "S"]
+        HStack(spacing: 6) {
+            ForEach(0..<7, id: \.self) { d in
+                let on = days.wrappedValue.contains(d)
+                Button {
+                    if on { days.wrappedValue.remove(d) } else { days.wrappedValue.insert(d) }
+                } label: {
+                    Text(symbols[d])
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                        .background(on ? Color.accentColor : Color.gray.opacity(0.15))
+                        .foregroundStyle(on ? Color.white : Color.primary)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Calendar.current.weekdaySymbols[d])
+                .accessibilityValue(on ? "selected" : "not selected")
             }
-
-            // End any open ParkSession (no endedAt)
-            if #available(iOS 17.0, *) {
-                let openFetch = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
-                let openSessions = try context.fetch(openFetch)
-                for s in openSessions { s.endedAt = Date() }
-            } else {
-                // Fallback: fetch all and end those without endedAt
-                let all = try context.fetch(FetchDescriptor<ParkSession>())
-                for s in all where s.endedAt == nil { s.endedAt = Date() }
-            }
-
-            // Start a new ParkSession for this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil)
-            context.insert(session)
-
-            try context.save()
-        } catch {
-            // Non-fatal: tracking failed
         }
     }
 
+    private var statusBanner: some View {
+        let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
+        return HStack(spacing: 10) {
+            Image(systemName: status.iconName).foregroundStyle(status.color)
+                .accessibilityHidden(true)
+            Text(status.label).font(.subheadline)
+            Spacer()
+        }
+        .padding(8)
+        .background(status.color.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: - Build editable state
+
+    private func editable(from r: AIRestriction) -> EditableRestriction {
+        let type = mapType(r.type) ?? .other
+        let days = Set(r.daysOfWeek.filter { (0...6).contains($0) })
+        let start: Date
+        let end: Date
+        let dur: Int?
+        if let d = r.durationMinutes, d > 0 {
+            dur = d
+            start = Date()
+            end = Date().addingTimeInterval(TimeInterval(d * 60))
+        } else {
+            dur = nil
+            let s = DateTimeUtils.parseHHmm(r.startTime) ?? (hour: 8, minute: 0)
+            let e = DateTimeUtils.parseHHmm(r.endTime) ?? (hour: 9, minute: 0)
+            let sDate = DateTimeUtils.todayAt(hour: s.hour, minute: s.minute)
+            var eDate = DateTimeUtils.todayAt(hour: e.hour, minute: e.minute)
+            if eDate <= sDate { eDate = eDate.addingTimeInterval(24 * 60 * 60) }
+            start = sDate
+            end = eDate
+        }
+        return EditableRestriction(include: true, type: type, days: days,
+                                   startTime: start, endTime: end,
+                                   durationMinutes: dur, notes: r.notes,
+                                   needsReview: r.needsReview ?? false)
+    }
+
+    // MARK: - Save
+
     private func saveAndSchedule() async {
-        // Create Restriction models for included items
         var created: [Restriction] = []
-        for (idx, r) in analysis.restrictions.enumerated() {
-            guard idx < includeFlags.count, includeFlags[idx] else { continue }
-            guard let mappedType = mapType(r.type) else { continue }
-
-            var startDate: Date
-            var endDate: Date
-            if let dur = r.durationMinutes, dur > 0 {
-                // Interpret as a time-limited parking window starting now
-                startDate = Date()
-                endDate = Date().addingTimeInterval(TimeInterval(dur * 60))
-            } else {
-                // Parse HH:mm
-                guard let start = DateTimeUtils.parseHHmm(r.startTime), let end = DateTimeUtils.parseHHmm(r.endTime) else { continue }
-                startDate = DateTimeUtils.todayAt(hour: start.hour, minute: start.minute)
-                endDate = DateTimeUtils.todayAt(hour: end.hour, minute: end.minute)
-                if endDate <= startDate {
-                    endDate = endDate.addingTimeInterval(24 * 60 * 60) // overnight
-                }
-            }
-
+        for item in items where item.include {
             let restriction = Restriction(
-                type: mappedType,
-                startTime: startDate,
-                endTime: endDate,
-                daysOfWeek: r.daysOfWeek,
+                type: item.type,
+                startTime: item.startTime,
+                endTime: item.endTime,
+                daysOfWeek: Array(item.days).sorted(),
                 sourceUser: sourceUser,
                 signPhotoFilename: photoFilename,
                 ocrText: ocrText,
@@ -199,38 +233,39 @@ struct AnalysisConfirmationView: View {
         }
 
         if setAsCurrentParking {
-            // Mark this as the current parking location
             setCurrentParking(to: spot)
-
             await NotificationManager.shared.schedule(for: created, spot: spot)
-
-            // Schedule AlarmKit countdowns for duration-based restrictions (one-time timers)
-            for r in created {
-                if let ocr = r.ocrText, ocr.lowercased().contains("hour") || ocr.lowercased().contains("minute") {
-                    let seconds = max(60.0, r.endTime.timeIntervalSince(r.startTime))
-                    Task {
-                        _ = await AlarmService.shared.requestAuthorization()
-                        do { let _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("\(r.type.displayName)")) } catch { }
-                    }
+            for (item, r) in zip(items.filter { $0.include }, created) where item.durationMinutes != nil {
+                let seconds = max(60.0, TimeInterval((item.durationMinutes ?? 0) * 60))
+                Task {
+                    _ = await AlarmService.shared.requestAuthorization()
+                    do { _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("\(r.type.displayName)")) } catch {}
                 }
             }
-
-            onFinished?(created)
-            dismiss()
-        } else {
-            // Do not schedule alerts or timers; just save the data
-            onFinished?(created)
-            dismiss()
         }
+        onFinished?(created)
+        dismiss()
     }
 
-    private func title(for type: AIRestrictionType) -> String {
-        switch type {
-        case .street_cleaning: return "Street Cleaning"
-        case .no_parking: return "No Parking"
-        case .metered: return "Metered"
-        case .permit: return "Permit"
-        case .other: return "Other"
+    private func setCurrentParking(to spot: ParkingSpot) {
+        do {
+            let existingCurrent = try context.fetch(FetchDescriptor<CurrentParking>())
+            if let first = existingCurrent.first {
+                first.spotID = spot.id
+                first.parkedAt = Date()
+            } else {
+                context.insert(CurrentParking(spotID: spot.id, parkedAt: Date()))
+            }
+            if #available(iOS 17.0, *) {
+                let openFetch = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
+                for s in try context.fetch(openFetch) { s.endedAt = Date() }
+            } else {
+                for s in try context.fetch(FetchDescriptor<ParkSession>()) where s.endedAt == nil { s.endedAt = Date() }
+            }
+            context.insert(ParkSession(spot: spot, startedAt: Date(), endedAt: nil))
+            try context.save()
+        } catch {
+            // Non-fatal: tracking failed
         }
     }
 
@@ -242,29 +277,5 @@ struct AnalysisConfirmationView: View {
         case .permit: return .permit
         case .other: return .other
         }
-    }
-
-    private func daysDescription(_ days: [Int]) -> String {
-        let symbols = Calendar.current.shortWeekdaySymbols // Sun..Sat
-        let labels = days.compactMap { (0...6).contains($0) ? symbols[$0] : nil }
-        return labels.isEmpty ? "None" : labels.joined(separator: ", ")
-    }
-
-    // "Common sense" check: if now is inside a forbidden window for today for types that matter
-    private func computeCannotParkNow() -> Bool {
-        let now = Date()
-        let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7 // 0..6
-
-        for r in analysis.restrictions {
-            guard r.type == .street_cleaning || r.type == .no_parking else { continue }
-            guard r.daysOfWeek.contains(weekday0_6) else { continue }
-            guard let s = DateTimeUtils.parseHHmm(r.startTime), let e = DateTimeUtils.parseHHmm(r.endTime) else { continue }
-            let start = DateTimeUtils.todayAt(hour: s.hour, minute: s.minute)
-            var end = DateTimeUtils.todayAt(hour: e.hour, minute: e.minute)
-            if end <= start { end = end.addingTimeInterval(24*60*60) }
-            if now >= start && now <= end { return true }
-        }
-        return false
     }
 }

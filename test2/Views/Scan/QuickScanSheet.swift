@@ -6,6 +6,14 @@ import SwiftData
 import CoreLocation
 import MapKit
 
+private struct PendingAnalysis: Identifiable {
+    let id = UUID()
+    let spot: ParkingSpot
+    let scanText: String
+    let photoFilename: String?
+    let analysis: AIAnalysisResponse
+}
+
 struct QuickScanSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -24,7 +32,8 @@ struct QuickScanSheet: View {
     @StateObject private var locationManager = LocationManager()
     @State private var photoFilename: String? = nil
     // Newly created or matched spot to edit after saving scan
-    @State private var newSpotForEdit: ParkingSpot? = nil
+    // Parsed result awaiting the user's confirm/correct before restrictions are saved.
+    @State private var pendingAnalysis: PendingAnalysis? = nil
 
     private let ocrService = VisionOCRService()
     private let aiService = AIAnalyzerService()
@@ -153,68 +162,25 @@ struct QuickScanSheet: View {
                                     parsed = localParser.analyze(ocrText: mergedText)
                                 }
 
-                                // Map AIRestriction -> Restriction models, attach to scan and spot
+                                // Present the editable confirmation screen instead of silently
+                                // committing possibly-wrong restrictions. Restrictions are created
+                                // and alarms scheduled only after the user confirms.
                                 await MainActor.run {
                                     recognizedText = mergedText
-                                    let now = Date()
-                                    for r in parsed.restrictions {
-                                        let type: RestrictionType
-                                        switch r.type {
-                                        case .no_parking: type = .noParking
-                                        case .street_cleaning: type = .streetCleaning
-                                        case .permit: type = .permit
-                                        case .metered: type = .metered
-                                        default: type = .other
-                                        }
-
-                                        // Build start/end times
-                                        let (startDate, endDate): (Date, Date) = {
-                                            if let dur = r.durationMinutes, dur > 0 {
-                                                let s = now
-                                                let e = now.addingTimeInterval(TimeInterval(dur * 60))
-                                                return (s, e)
-                                            }
-                                            if let sHM = DateTimeUtils.parseHHmm(r.startTime), let eHM = DateTimeUtils.parseHHmm(r.endTime) {
-                                                let s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
-                                                var e = DateTimeUtils.todayAt(hour: eHM.0, minute: eHM.1)
-                                                if e <= s { e = e.addingTimeInterval(24 * 60 * 60) }
-                                                return (s, e)
-                                            }
-                                            let s = DateTimeUtils.todayAt(hour: 0, minute: 0)
-                                            let e = s.addingTimeInterval(24 * 60 * 60)
-                                            return (s, e)
-                                        }()
-
-                                        let restriction = Restriction(
-                                            type: type,
-                                            startTime: startDate,
-                                            endTime: endDate,
-                                            daysOfWeek: r.daysOfWeek,
-                                            sourceUser: UUID(),
-                                            signPhotoFilename: filenames.first,
-                                            ocrText: mergedText,
-                                            spot: spot,
-                                            scan: scan
-                                        )
-                                        context.insert(restriction)
-                                        scan.restrictions.append(restriction)
-                                        spot.restrictions.append(restriction)
-                                    }
-
-                                    // Compute and store signal state
-                                    let status = ParkingSignalEvaluator.status(for: parsed, now: now, leadMinutes: leadMinutes)
+                                    let status = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
                                     signalStatus = status
                                     scan.signalState = status.rawValue
                                     scan.status = "complete"
-                                    scan.analyzedAt = now
+                                    scan.analyzedAt = Date()
                                     try? context.save()
 
-                                    // Close review/camera flow
                                     showReview = false
                                     showCamera = false
 
-                                    // Present spot edit for confirmation/adjustments
-                                    newSpotForEdit = spot
+                                    pendingAnalysis = PendingAnalysis(spot: spot,
+                                                                      scanText: mergedText,
+                                                                      photoFilename: filenames.first,
+                                                                      analysis: parsed)
                                 }
                             }
                         },
@@ -231,9 +197,16 @@ struct QuickScanSheet: View {
                     )
                 }
             }
-            .sheet(item: $newSpotForEdit) { spot in
-                SpotEditView(spot: spot)
-                    .environment(\.modelContext, context)
+            .sheet(item: $pendingAnalysis) { pending in
+                AnalysisConfirmationView(
+                    spot: pending.spot,
+                    sourceUser: LocalIdentity.userID,
+                    ocrText: pending.scanText,
+                    photoFilename: pending.photoFilename,
+                    analysis: pending.analysis,
+                    onFinished: { _ in dismiss() }
+                )
+                .environment(\.modelContext, context)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
