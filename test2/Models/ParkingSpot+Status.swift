@@ -8,8 +8,8 @@ extension ParkingSpot {
         let cal = Calendar.current
         var best: Date? = nil
         for r in restrictions {
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
+            // Empty days = applies every day (matches isActive semantics).
+            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             let hour = cal.component(.hour, from: r.startTime)
             let minute = cal.component(.minute, from: r.startTime)
             if let candidate = DateTimeUtils.nextOccurrence(daysOfWeek: days, hour: hour, minute: minute, from: now, calendar: cal, lookaheadDays: 14) {
@@ -23,19 +23,14 @@ extension ParkingSpot {
     /// - Parameter now: Reference time (defaults to current date).
     func isRestrictedNow(at now: Date = Date()) -> Bool {
         let cal = Calendar.current
-        let weekday = DateTimeUtils.weekdayIndex0_6(now, calendar: cal)
-        for r in restrictions {
-            let days = r.daysOfWeek
-            if !days.isEmpty && !days.contains(weekday) { continue }
+        for r in restrictions where r.type == .noParking || r.type == .streetCleaning {
             let sh = cal.component(.hour, from: r.startTime)
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            let start = DateTimeUtils.todayAt(hour: sh, minute: sm, ref: now, calendar: cal)
-            var end = DateTimeUtils.todayAt(hour: eh, minute: em, ref: now, calendar: cal)
-            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
-            if now >= start && now <= end {
-                if r.type == .noParking || r.type == .streetCleaning { return true }
+            if DateTimeUtils.isWindowActive(startHour: sh, startMinute: sm, endHour: eh, endMinute: em,
+                                            days: r.daysOfWeek, now: now, calendar: cal) {
+                return true
             }
         }
         return false

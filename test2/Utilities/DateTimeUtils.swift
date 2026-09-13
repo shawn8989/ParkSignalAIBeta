@@ -101,4 +101,30 @@ nonisolated enum DateTimeUtils {
             return "now"
         }
     }
+
+    /// Whether a recurring restriction window is active at `now`.
+    ///
+    /// - Parameters:
+    ///   - days: active weekdays, 0 = Sunday … 6 = Saturday. **Empty means every day.**
+    /// Correctly handles overnight windows (end <= start) that began the PREVIOUS day —
+    /// e.g. "No Parking 22:00–06:00 on Fri" is active at Sat 02:00 (the Friday-night
+    /// window that runs into Saturday morning), which the naive same-day check missed.
+    static func isWindowActive(startHour: Int, startMinute: Int,
+                               endHour: Int, endMinute: Int,
+                               days: [Int], now: Date, calendar: Calendar = .current) -> Bool {
+        let daySet = days.isEmpty ? Set(0...6) : Set(days.filter { (0...6).contains($0) })
+        guard !daySet.isEmpty else { return false }
+        // Anchor the window to today (offset 0) and yesterday (offset -1) so an overnight
+        // window that started the previous day is still detected in its early-morning tail.
+        for offset in [0, -1] {
+            guard let refDay = calendar.date(byAdding: .day, value: offset, to: now) else { continue }
+            let refWeekday = weekdayIndex0_6(refDay, calendar: calendar)
+            guard daySet.contains(refWeekday) else { continue }
+            let start = todayAt(hour: startHour, minute: startMinute, ref: refDay, calendar: calendar)
+            var end = todayAt(hour: endHour, minute: endMinute, ref: refDay, calendar: calendar)
+            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
+            if now >= start && now <= end { return true }
+        }
+        return false
+    }
 }

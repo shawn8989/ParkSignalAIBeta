@@ -99,5 +99,33 @@ struct DateTimeUtilsMoreTests {
         #expect(parts.count == 2)
         #expect(parts[0] != parts[1])
     }
+
+    // MARK: - isWindowActive (overnight + empty days)
+
+    @Test("Overnight window is active in the early-morning tail (previous day)")
+    func isWindowActiveOvernight() {
+        // Fri(5) 22:00–06:00. 2024-01-05 is Friday, 2024-01-06 Saturday.
+        #expect(DateTimeUtils.isWindowActive(startHour: 22, startMinute: 0, endHour: 6, endMinute: 0,
+                                             days: [5], now: iso("2024-01-06T02:00:00Z"), calendar: utc) == true)
+        #expect(DateTimeUtils.isWindowActive(startHour: 22, startMinute: 0, endHour: 6, endMinute: 0,
+                                             days: [5], now: iso("2024-01-06T07:00:00Z"), calendar: utc) == false)
+    }
+
+    @Test("Empty days means every day")
+    func isWindowActiveEmptyDays() {
+        #expect(DateTimeUtils.isWindowActive(startHour: 22, startMinute: 0, endHour: 6, endMinute: 0,
+                                             days: [], now: iso("2024-01-06T02:00:00Z"), calendar: utc) == true)
+    }
+
+    @Test("Daytime window active only within its hours and on its day")
+    func isWindowActiveDaytime() {
+        // 08:00–10:00 on Saturday (6).
+        #expect(DateTimeUtils.isWindowActive(startHour: 8, startMinute: 0, endHour: 10, endMinute: 0,
+                                             days: [6], now: iso("2024-01-06T09:00:00Z"), calendar: utc) == true)
+        #expect(DateTimeUtils.isWindowActive(startHour: 8, startMinute: 0, endHour: 10, endMinute: 0,
+                                             days: [6], now: iso("2024-01-06T11:00:00Z"), calendar: utc) == false)
+        #expect(DateTimeUtils.isWindowActive(startHour: 8, startMinute: 0, endHour: 10, endMinute: 0,
+                                             days: [6], now: iso("2024-01-05T09:00:00Z"), calendar: utc) == false)
+    }
 }
 #endif
