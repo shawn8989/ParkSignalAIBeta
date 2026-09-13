@@ -39,21 +39,23 @@ struct OnboardingView: View {
 
             TabView(selection: $page) {
                 ForEach(Array(pages.enumerated()), id: \.element.id) { index, item in
-                    VStack(spacing: 24) {
-                        Spacer()
-                        Image(systemName: item.symbol)
-                            .font(.system(size: 88, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                            .accessibilityHidden(true)
-                        Text(item.title)
-                            .font(.title.bold())
-                            .multilineTextAlignment(.center)
-                        Text(item.body)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                        Spacer()
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            Image(systemName: item.symbol)
+                                .font(.system(size: 88, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .accessibilityHidden(true)
+                            Text(item.title)
+                                .font(.title.bold())
+                                .multilineTextAlignment(.center)
+                            Text(item.body)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
                     }
                     .tag(index)
                 }
