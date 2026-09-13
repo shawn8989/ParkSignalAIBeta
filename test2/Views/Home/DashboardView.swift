@@ -89,6 +89,7 @@ struct DashboardView: View {
                     Text("City Data Active: \(city.cityName)")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal)
                         .padding(.bottom, 4)
                 }
@@ -100,6 +101,7 @@ struct DashboardView: View {
                             .accessibilityHidden(true)
                         Text("My Curb Signal: \(status.label)")
                             .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
                     .padding(.horizontal)

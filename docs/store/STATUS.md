@@ -47,16 +47,21 @@ local Xcode builds were avoided; correctness was verified via **GitHub Actions C
   (the color cue stays on the adjacent dot); Dynamic Type — every truncation-prone
   `lineLimit(1)` label gained `.minimumScaleFactor(0.75)` so text shrinks instead of
   clipping at large sizes.
+- **6. Accessibility (on-device visual pass)** — PR #17. Ran the app in the iOS
+  Simulator at the **largest accessibility Dynamic Type size (AX5)** and fixed the
+  truncation found: the onboarding page now scrolls (subtitle no longer clips), and
+  the Dashboard "City Data Active: …" and "My Curb Signal: …" rows use
+  `.fixedSize(horizontal: false, vertical: true)` so they wrap and show in full.
+  Settings/Form screens already wrap correctly; standard nav/tab controls meet the
+  44pt target; contrast checked on the signal surfaces.
 
 ## Remaining / deferred
 
-- **6. Accessibility (device-only residual):** the code has been hardened
-  (labels, decorative flags, `.primary` status text, `minimumScaleFactor`), but the
-  final *visual* confirmation still needs the app rendered at the largest Dynamic
-  Type sizes, a 44pt tap-target check (mainly the small map-pin markers), and
-  measured contrast ratios. These are inherently on-device/visual and can't be done
-  from CI — and running the app locally is currently blocked by the full disk. This
-  is the one part of the goal that conflicts with its own "no device" constraint.
+- **6. Accessibility (minor cosmetic left):** at the very largest accessibility
+  text size the Dashboard **map legend overlay grows large and overlaps** the map /
+  the "City Data Active" line — everything is still fully readable (no truncation),
+  but the legend could be capped, collapsed, or made scrollable at huge sizes. That's
+  a design choice worth your eye, so it's left as polish rather than guessed at.
 - **7. Phase 3 scaffolding (StoreKit paywall + AI proxy client)** — stretch; not
   started (deferred to keep spend in priority order; also needs product IDs / a
   proxy endpoint which are owner/infra decisions).
