@@ -38,17 +38,25 @@ local Xcode builds were avoided; correctness was verified via **GitHub Actions C
     `.main`-queue NotificationLog observer, and made the scan-save `Task`s
     `@MainActor` so SwiftData models no longer cross an actor boundary.
   - All behavior-preserving.
-- **6. Accessibility (code portion)** — PRs #10, #this. Toolbar controls use `Label`
-  (accessible names), the Settings gear has an explicit `accessibilityLabel`, map
-  annotations carry labels, a Version label was added, and the color-only signal
+- **6. Accessibility (code portion)** — PRs #10, #15, #16. Toolbar controls use
+  `Label` (accessible names), the Settings gear has an explicit `accessibilityLabel`,
+  map annotations carry labels, a Version label was added, and the color-only signal
   icons that duplicate an adjacent text label are now `accessibilityHidden(true)`
-  (Dashboard, AnalysisConfirmation, ParkingSpotDetail, live scanner).
+  (Dashboard, AnalysisConfirmation, ParkingSpotDetail, live scanner). #16 also:
+  contrast — the colored status labels in `CarListView` now use `.primary` text
+  (the color cue stays on the adjacent dot); Dynamic Type — every truncation-prone
+  `lineLimit(1)` label gained `.minimumScaleFactor(0.75)` so text shrinks instead of
+  clipping at large sizes.
 
 ## Remaining / deferred
 
-- **6. Accessibility (device-only residual):** confirm no truncation at the largest
-  Dynamic Type sizes, audit 44pt minimum tap targets, and check contrast ratios.
-  These are visual/on-device checks that can't be done from CI.
+- **6. Accessibility (device-only residual):** the code has been hardened
+  (labels, decorative flags, `.primary` status text, `minimumScaleFactor`), but the
+  final *visual* confirmation still needs the app rendered at the largest Dynamic
+  Type sizes, a 44pt tap-target check (mainly the small map-pin markers), and
+  measured contrast ratios. These are inherently on-device/visual and can't be done
+  from CI — and running the app locally is currently blocked by the full disk. This
+  is the one part of the goal that conflicts with its own "no device" constraint.
 - **7. Phase 3 scaffolding (StoreKit paywall + AI proxy client)** — stretch; not
   started (deferred to keep spend in priority order; also needs product IDs / a
   proxy endpoint which are owner/infra decisions).

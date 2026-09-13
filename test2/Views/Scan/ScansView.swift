@@ -35,6 +35,7 @@ struct ScansView: View {
                                     Text(scan.address ?? String(format: "%.5f, %.5f", scan.latitude, scan.longitude))
                                         .font(.headline)
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
                                     Text(scan.ocrText.isEmpty ? "(No text)" : scan.ocrText)
                                         .lineLimit(2)
                                     HStack(spacing: 6) {

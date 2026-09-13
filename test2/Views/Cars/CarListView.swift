@@ -100,6 +100,7 @@ struct CarListView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.green)
                                                 .lineLimit(1)
+                                                .minimumScaleFactor(0.75)
                                             Text("• \(elapsedString(since: activeSession.startedAt))")
                                                 .font(.caption)
                                                 .foregroundColor(.green)
@@ -118,7 +119,7 @@ struct CarListView: View {
                                         let status = ParkingSignalEvaluator.status(for: activeSpot, now: now, leadMinutes: leadMinutes)
                                         HStack(spacing: 6) {
                                             Circle().fill(status.color).frame(width: 8, height: 8)
-                                            Text(status.label).font(.caption).foregroundColor(status.color)
+                                            Text(status.label).font(.caption).foregroundColor(.primary)
                                         }
                                     }
                                 }
@@ -158,6 +159,7 @@ struct CarListView: View {
                                     .font(.caption)
                                     .foregroundColor(.green)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                 Text("• \(elapsedString(since: activeSession.startedAt))")
                                     .font(.caption)
                                     .foregroundColor(.green)
@@ -169,7 +171,7 @@ struct CarListView: View {
                                 let status = ParkingSignalEvaluator.status(for: activeSpot, now: now, leadMinutes: leadMinutes)
                                 Text("•")
                                 Circle().fill(status.color).frame(width: 8, height: 8)
-                                Text(status.label).font(.caption).foregroundColor(status.color)
+                                Text(status.label).font(.caption).foregroundColor(.primary)
                                 Button {
                                     detailSpot = activeSpot
                                 } label: {

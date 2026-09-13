@@ -914,6 +914,7 @@ struct ParkingSpotDetailView: View {
                         Image(systemName: "mappin.and.ellipse")
                         Text(resolvedSavedScanAddress ?? last.address ?? String(format: "%.5f, %.5f", last.latitude, last.longitude))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Spacer()
                         Image(systemName: "chevron.right").foregroundColor(.secondary)
                     }
@@ -1058,6 +1059,7 @@ struct ParkingSpotDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
         }
