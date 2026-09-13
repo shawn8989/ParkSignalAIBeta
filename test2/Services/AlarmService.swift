@@ -261,7 +261,7 @@ final class AlarmService: ObservableObject {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
             do {
-                try await AlarmManager.shared.cancel(id: id)
+                try AlarmManager.shared.cancel(id: id)
                 self.objectWillChange.send()
             } catch { }
         }
@@ -281,7 +281,7 @@ final class AlarmService: ObservableObject {
             do {
                 let alarms = try AlarmManager.shared.alarms
                 for alarm in alarms {
-                    try await AlarmManager.shared.cancel(id: alarm.id)
+                    try AlarmManager.shared.cancel(id: alarm.id)
                 }
                 self.objectWillChange.send()
             } catch {
