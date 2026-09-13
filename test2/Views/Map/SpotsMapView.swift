@@ -311,33 +311,12 @@ struct SpotsMapView: View {
     }
 
     private func isRestrictedNow(_ spot: ParkingSpot, now: Date = Date()) -> Bool {
-        let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
-        for r in spot.restrictions {
-            let days = r.daysOfWeek
-            if !days.isEmpty && !days.contains(weekday0_6) { continue }
-            let sh = cal.component(.hour, from: r.startTime)
-            let sm = cal.component(.minute, from: r.startTime)
-            let eh = cal.component(.hour, from: r.endTime)
-            let em = cal.component(.minute, from: r.endTime)
-            let start = todayAt(hour: sh, minute: sm, ref: now)
-            var end = todayAt(hour: eh, minute: em, ref: now)
-            if end <= start { end = end.addingTimeInterval(24*60*60) }
-            if now >= start && now <= end {
-                if r.type == .noParking || r.type == .streetCleaning { return true }
-            }
-        }
-        return false
+        // Delegate to the shared, overnight-correct model helper.
+        spot.isRestrictedNow(at: now)
     }
 
     private func nextRestrictionDate(for spot: ParkingSpot, from now: Date = Date()) -> Date? {
         return spot.nextRestrictionDate(from: now)
-    }
-    
-    private func todayAt(hour: Int, minute: Int, ref: Date) -> Date {
-        var comps = Calendar.current.dateComponents([.year, .month, .day], from: ref)
-        comps.hour = hour; comps.minute = minute; comps.second = 0
-        return Calendar.current.date(from: comps) ?? ref
     }
     
     private func filteredSpots() -> [ParkingSpot] {

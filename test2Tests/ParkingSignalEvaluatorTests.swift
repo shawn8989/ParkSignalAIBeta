@@ -140,5 +140,31 @@ struct ParkingSignalEvaluatorTests {
         let a = AIAnalysisResponse(restrictions: [])
         #expect(ParkingSignalEvaluator.status(for: a, now: now) == .gray)
     }
+
+    // MARK: - Overnight windows
+
+    @Test("Overnight restriction from yesterday is still red in the early morning")
+    func overnightYesterdayRed() {
+        let now = at(2, 0, ref: Date())               // today 02:00
+        let yesterday = (todayWeekday0_6(now) + 6) % 7 // yesterday's weekday
+        let r = Restriction(type: .noParking,
+                            startTime: at(22, 0, ref: now),
+                            endTime: at(6, 0, ref: now),
+                            daysOfWeek: [yesterday],
+                            sourceUser: UUID())
+        #expect(ParkingSignalEvaluator.status(for: [r], now: now) == .red)
+    }
+
+    @Test("Overnight restriction is green after its window ends")
+    func overnightAfterEndGreen() {
+        let now = at(7, 0, ref: Date())                // today 07:00 (after 06:00 end)
+        let yesterday = (todayWeekday0_6(now) + 6) % 7
+        let r = Restriction(type: .noParking,
+                            startTime: at(22, 0, ref: now),
+                            endTime: at(6, 0, ref: now),
+                            daysOfWeek: [yesterday],
+                            sourceUser: UUID())
+        #expect(ParkingSignalEvaluator.status(for: [r], now: now) == .green)
+    }
 }
 #endif

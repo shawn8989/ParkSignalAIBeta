@@ -74,23 +74,18 @@ enum ParkingEligibilityEvaluator {
 
     private static func isActive(_ r: Restriction, at now: Date) -> Bool {
         let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
-        guard r.daysOfWeek.isEmpty || r.daysOfWeek.contains(weekday0_6) else { return false }
-        let start = DateTimeUtils.todayAt(hour: cal.component(.hour, from: r.startTime), minute: cal.component(.minute, from: r.startTime), ref: now)
-        var end = DateTimeUtils.todayAt(hour: cal.component(.hour, from: r.endTime), minute: cal.component(.minute, from: r.endTime), ref: now)
-        if end <= start { end = end.addingTimeInterval(24*60*60) }
-        return now >= start && now <= end
+        return DateTimeUtils.isWindowActive(startHour: cal.component(.hour, from: r.startTime),
+                                            startMinute: cal.component(.minute, from: r.startTime),
+                                            endHour: cal.component(.hour, from: r.endTime),
+                                            endMinute: cal.component(.minute, from: r.endTime),
+                                            days: r.daysOfWeek, now: now, calendar: cal)
     }
 
     private static func isActive(_ r: CityRestriction, at now: Date) -> Bool {
-        let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
-        guard r.daysOfWeek.isEmpty || r.daysOfWeek.contains(weekday0_6) else { return false }
         guard let s = DateTimeUtils.parseHHmm(r.startTime), let e = DateTimeUtils.parseHHmm(r.endTime) else { return false }
-        let start = DateTimeUtils.todayAt(hour: s.0, minute: s.1, ref: now)
-        var end = DateTimeUtils.todayAt(hour: e.0, minute: e.1, ref: now)
-        if end <= start { end = end.addingTimeInterval(24*60*60) }
-        return now >= start && now <= end
+        return DateTimeUtils.isWindowActive(startHour: s.hour, startMinute: s.minute,
+                                            endHour: e.hour, endMinute: e.minute,
+                                            days: r.daysOfWeek, now: now)
     }
 
     private static func nextRestrictionDate(spotRestrictions: [Restriction], cityRestrictions: [CityRestriction], from now: Date) -> Date? {
@@ -100,8 +95,7 @@ enum ParkingEligibilityEvaluator {
         var best: Date? = nil
         // Spot restrictions
         for r in spotRestrictions {
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
+            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             let (h, m) = hourMinute(r.startTime)
             for offset in 0...13 {
                 guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
@@ -117,8 +111,7 @@ enum ParkingEligibilityEvaluator {
         }
         // City restrictions
         for cr in cityRestrictions {
-            let days = cr.daysOfWeek
-            if days.isEmpty { continue }
+            let days = cr.daysOfWeek.isEmpty ? Array(0...6) : cr.daysOfWeek
             guard let s = DateTimeUtils.parseHHmm(cr.startTime) else { continue }
             for offset in 0...13 {
                 guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }

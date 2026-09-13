@@ -110,20 +110,15 @@ struct ParkingSignalEvaluator {
 
     static func status(for spot: ParkingSpot, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
         let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
 
-        // Helper to check active window for a Restriction on a given date
+        // Helper to check active window for a Restriction (handles overnight windows).
         func isActive(_ r: Restriction) -> Bool {
-            // If days specified, require match
-            if !r.daysOfWeek.isEmpty && !r.daysOfWeek.contains(weekday0_6) { return false }
             let sh = cal.component(.hour, from: r.startTime)
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            let start = todayAt(hour: sh, minute: sm, ref: now)
-            var end = todayAt(hour: eh, minute: em, ref: now)
-            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
-            return (now >= start && now <= end)
+            return DateTimeUtils.isWindowActive(startHour: sh, startMinute: sm, endHour: eh, endMinute: em,
+                                                days: r.daysOfWeek, now: now, calendar: cal)
         }
 
         // RED: any illegal restriction active now
@@ -173,18 +168,14 @@ struct ParkingSignalEvaluator {
 
     static func status(for restrictions: [Restriction], now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
         let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
 
         func isActive(_ r: Restriction) -> Bool {
-            if !r.daysOfWeek.isEmpty && !r.daysOfWeek.contains(weekday0_6) { return false }
             let sh = cal.component(.hour, from: r.startTime)
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
             let em = cal.component(.minute, from: r.endTime)
-            let start = todayAt(hour: sh, minute: sm, ref: now)
-            var end = todayAt(hour: eh, minute: em, ref: now)
-            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
-            return (now >= start && now <= end)
+            return DateTimeUtils.isWindowActive(startHour: sh, startMinute: sm, endHour: eh, endMinute: em,
+                                                days: r.daysOfWeek, now: now, calendar: cal)
         }
 
         // RED: any illegal restriction active now
@@ -210,27 +201,18 @@ struct ParkingSignalEvaluator {
     // Evaluate from an AIAnalysisResponse (pre‑save preview)
     static func status(for analysis: AIAnalysisResponse, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
         let cal = Calendar.current
-        let weekday0_6 = (cal.component(.weekday, from: now) + 6) % 7
 
         func parseHHmm(_ s: String) -> (Int, Int)? {
             let parts = s.split(separator: ":")
             guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]), (0..<24).contains(h), (0..<60).contains(m) else { return nil }
             return (h, m)
         }
-        func todayAt(_ h: Int, _ m: Int, ref: Date) -> Date {
-            var c = Calendar.current.dateComponents([.year, .month, .day], from: ref)
-            c.hour = h; c.minute = m; c.second = 0
-            return Calendar.current.date(from: c) ?? ref
-        }
         func isActive(_ r: AIRestriction) -> Bool {
-            if !r.daysOfWeek.isEmpty && !r.daysOfWeek.contains(weekday0_6) { return false }
-            // Duration-only restrictions are treated as active now if durationMinutes > 0 (time-limited parking)
+            // Duration-only restrictions are treated as active now (time-limited parking).
             if let dur = r.durationMinutes, dur > 0 { return true }
             guard let s = parseHHmm(r.startTime), let e = parseHHmm(r.endTime) else { return false }
-            let start = todayAt(s.0, s.1, ref: now)
-            var end = todayAt(e.0, e.1, ref: now)
-            if end <= start { end = end.addingTimeInterval(24 * 60 * 60) }
-            return (now >= start && now <= end)
+            return DateTimeUtils.isWindowActive(startHour: s.0, startMinute: s.1, endHour: e.0, endMinute: e.1,
+                                                days: r.daysOfWeek, now: now, calendar: cal)
         }
 
         // RED
@@ -261,8 +243,8 @@ struct ParkingSignalEvaluator {
         func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
         var best: Date? = nil
         for r in spot.restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
+            // Empty days = applies every day (matches isActive semantics).
+            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             let (h, m) = hourMinute(r.startTime)
             for offset in 0...13 {
                 guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
@@ -289,8 +271,8 @@ struct ParkingSignalEvaluator {
         }
         var best: Date? = nil
         for r in analysis.restrictions where (r.type == .no_parking || r.type == .street_cleaning) {
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
+            // Empty days = applies every day (matches isActive semantics).
+            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             guard let (h, m) = parseHHmm(r.startTime) else { continue }
             for offset in 0...13 {
                 guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
@@ -313,8 +295,8 @@ struct ParkingSignalEvaluator {
         func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
         var best: Date? = nil
         for r in restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
+            // Empty days = applies every day (matches isActive semantics).
+            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             let (h, m) = hourMinute(r.startTime)
             for offset in 0...13 {
                 guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
@@ -331,10 +313,5 @@ struct ParkingSignalEvaluator {
         return best
     }
 
-    private static func todayAt(hour: Int, minute: Int, ref: Date) -> Date {
-        var comps = Calendar.current.dateComponents([.year, .month, .day], from: ref)
-        comps.hour = hour; comps.minute = minute; comps.second = 0
-        return Calendar.current.date(from: comps) ?? ref
-    }
 }
 
