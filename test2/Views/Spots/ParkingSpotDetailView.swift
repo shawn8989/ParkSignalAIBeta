@@ -242,6 +242,13 @@ struct ParkingSpotDetailView: View {
                         // In a real app, surface this to the user
                     }
                     onUpdate?(spot)
+                    // Cancel any prior alarms for this restriction id (handles edits that
+                    // change days/times), then (re)schedule from the saved values.
+                    let saved = newRestriction
+                    Task {
+                        await NotificationManager.shared.cancel(forRestrictionIDs: [saved.id])
+                        await NotificationManager.shared.schedule(for: [saved], spot: spot)
+                    }
                     Task { await enrichFromCityData() }
                 },
                 sourceUser: currentUserID ?? UUID()
@@ -1001,11 +1008,14 @@ struct ParkingSpotDetailView: View {
             }
             .onDelete { indexSet in
                 let items = indexSet.map { spot.restrictions[$0] }
+                let ids = items.map { $0.id }
                 for r in items {
                     context.delete(r)
                 }
                 spot.restrictions.remove(atOffsets: indexSet)
                 try? context.save()
+                // Remove the deleted restrictions' repeating alarms.
+                Task { await NotificationManager.shared.cancel(forRestrictionIDs: ids) }
             }
             if spot.restrictions.isEmpty {
                 Text("No restrictions recorded.")
@@ -1104,7 +1114,10 @@ struct ParkingSpotDetailView: View {
     }
 
     private func scheduleNextRestrictionNotification(for car: Car, at spot: ParkingSpot) {
-        guard let next = spot.nextRestrictionDate() else { return }
+        guard let start = spot.nextRestrictionDate() else { return }
+        // Fire the alert the user's lead time BEFORE the restriction starts (not at start).
+        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
+        let next = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
         let center = UNUserNotificationCenter.current()
         let id = "nextRestriction.car.\(car.id.uuidString).spot.\(spot.id.uuidString)"
         center.removePendingNotificationRequests(withIdentifiers: [id])
@@ -1340,6 +1353,10 @@ struct ParkingSpotDetailView: View {
         // Cancel pending alerts for any cars parked here
         let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
         for s in active { if let car = s.car { cancelAlert(for: car) } }
+
+        // Cancel the repeating weekly alarms for this spot's restrictions before deleting.
+        let restrictionIDs = spot.restrictions.map { $0.id }
+        Task { await NotificationManager.shared.cancel(forRestrictionIDs: restrictionIDs) }
 
         // Delete child objects explicitly to avoid dangling references
         for r in spot.restrictions { context.delete(r) }
