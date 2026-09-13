@@ -447,7 +447,7 @@ struct ParkingSpotDetailView: View {
         }
         .sheet(isPresented: $showMapSheet) {
             NavigationStack {
-                Map(coordinateRegion: $mapRegion)
+                Map(initialPosition: .region(mapRegion))
                     .ignoresSafeArea()
                     .navigationTitle(mapPinTitle ?? "Location")
                     .navigationBarTitleDisplayMode(.inline)
@@ -468,7 +468,7 @@ struct ParkingSpotDetailView: View {
             }
             refreshPendingAlerts()
         }
-        .onChange(of: spot.parkSessions.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _ in
+        .onChange(of: spot.parkSessions.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _, _ in
             refreshPendingAlerts()
         }
         .alert("Schedule Alert?", isPresented: $showSchedulePrompt) {

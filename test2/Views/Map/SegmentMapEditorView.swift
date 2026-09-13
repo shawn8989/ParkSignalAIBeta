@@ -193,7 +193,7 @@ struct SegmentMapEditorView: View {
                             Text("Right").tag(StreetSide.right)
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: segSide) { newValue in
+                        .onChange(of: segSide) { _, newValue in
                             scan.segmentStreetSide = newValue.rawValue
                             try? context.save()
                         }

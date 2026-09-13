@@ -55,7 +55,7 @@ struct SpotPhotosView: View {
                 }
             }
         }
-        .onChange(of: pickerItem) { item in
+        .onChange(of: pickerItem) { _, item in
             Task { await importFromPicker(item) }
         }
         .sheet(isPresented: $isCamera) {

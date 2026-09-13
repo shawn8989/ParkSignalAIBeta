@@ -296,13 +296,13 @@ struct DashboardView: View {
             .onDisappear {
                 locationManager.stopUpdatingLocation()
             }
-            .onChange(of: locationManager.authorizationStatus) { newValue in
+            .onChange(of: locationManager.authorizationStatus) { _, newValue in
                 if newValue == .authorizedWhenInUse || newValue == .authorizedAlways {
                     locationManager.startUpdatingLocation()
                 }
             }
             // Optionally auto-center once when we first get a location
-            .onChange(of: EquatableCoordinate(locationManager.lastLocation?.coordinate)) { coord in
+            .onChange(of: EquatableCoordinate(locationManager.lastLocation?.coordinate)) { _, coord in
                 guard let lat = coord.latitude, let lon = coord.longitude else { return }
                 let target = CLLocationCoordinate2D(latitude: lat, longitude: lon)
                 maybeAutoCenter(to: target)

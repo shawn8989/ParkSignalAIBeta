@@ -88,7 +88,7 @@ struct AnalysisConfirmationView: View {
                 includeFlags = Array(repeating: true, count: analysis.restrictions.count)
                 cannotParkNow = computeCannotParkNow()
             }
-            .onChange(of: analysis.restrictions.count) { newCount in
+            .onChange(of: analysis.restrictions.count) { _, newCount in
                 includeFlags = Array(repeating: true, count: newCount)
             }
             .alert("Couldn't Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {

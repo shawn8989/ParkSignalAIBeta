@@ -190,13 +190,13 @@ struct ParkingSignScannerView: View {
                 }
             }
             .navigationBarHidden(true)
-            .onChange(of: latestFrameText) { newValue in
+            .onChange(of: latestFrameText) { _, newValue in
                 // Merge newly recognized frame text into the aggregated set
                 appendToAggregation(newValue)
                 // Evaluate stabilization
                 evaluateStabilization()
             }
-            .onChange(of: aggregatedText) { _ in
+            .onChange(of: aggregatedText) { _, _ in
                 scheduleLiveParse()
             }
             .sheet(isPresented: $showCameraPicker) {
