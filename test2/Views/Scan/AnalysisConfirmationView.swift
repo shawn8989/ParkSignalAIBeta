@@ -24,6 +24,7 @@ struct AnalysisConfirmationView: View {
                 let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
                 HStack(spacing: 10) {
                     Image(systemName: status.iconName).foregroundStyle(status.color)
+                        .accessibilityHidden(true)
                     Text(status.label).font(.subheadline)
                     Spacer()
                 }

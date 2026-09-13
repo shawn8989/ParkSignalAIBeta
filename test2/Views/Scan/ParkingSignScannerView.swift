@@ -107,6 +107,7 @@ struct ParkingSignScannerView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: sig.iconName)
                                         .foregroundStyle(sig.color)
+                                        .accessibilityHidden(true)
                                     Text(sig.label)
                                         .font(.caption)
                                         .foregroundStyle(sig.color)
