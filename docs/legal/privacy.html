@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkSignal AI — Privacy Policy</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1c1c1e;
+    --muted: #6b6b70;
+    --accent: #0a6cff;
+    --card: #f5f5f7;
+    --border: #e3e3e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131315;
+      --fg: #ececef;
+      --muted: #9a9aa0;
+      --accent: #5aa0ff;
+      --card: #1e1e21;
+      --border: #2c2c30;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 4px; }
+  h2 { font-size: 1.25rem; margin: 2.2em 0 0.4em; }
+  .updated { color: var(--muted); margin: 0 0 1.5em; font-size: 0.95rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2em; }
+  li { margin: 0.35em 0; }
+  .callout {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 1.4em 0;
+  }
+  .contact {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-top: 1em;
+  }
+  footer { margin-top: 3em; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 1.2em; }
+  strong { font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ParkSignal AI — Privacy Policy</h1>
+  <p class="updated">Last updated: {{EFFECTIVE_DATE}}</p>
+
+  <p>ParkSignal AI (&ldquo;the app&rdquo;) is designed to keep your data on your device. This policy explains what the app accesses and why.</p>
+
+  <h2>The short version</h2>
+  <ul>
+    <li>The app <strong>does not collect, transmit, sell, or share any personal data.</strong></li>
+    <li>Everything you create — parking spots, scans, photos, restrictions, alarms — is stored <strong>only on your device</strong>.</li>
+    <li>There are <strong>no accounts, no analytics, no advertising, and no third-party tracking.</strong></li>
+  </ul>
+
+  <h2>What the app accesses on your device</h2>
+  <ul>
+    <li><strong>Camera</strong> — to take a photo of a parking sign so the app can read it. Sign text is recognized <strong>on your device</strong> using Apple's on-device text recognition. Photos are saved locally in the app and are not uploaded.</li>
+    <li><strong>Photo Library</strong> — only if you choose an existing photo of a sign to analyze. The app reads the photo you pick; it does not scan your library.</li>
+    <li><strong>Location (while using the app)</strong> — to show nearby parking spots on the map and to check the rules for where you are parked. Your location is used on the device and is <strong>not</strong> sent to us or anyone else.</li>
+    <li><strong>Notifications &amp; Alarms</strong> — to remind you before a parking restriction starts. Scheduled locally on your device.</li>
+    <li><strong>Local storage (UserDefaults / on-device database)</strong> — to remember your settings and your saved spots between launches.</li>
+  </ul>
+
+  <h2>iCloud sync</h2>
+  <p>If you are signed in to iCloud, the app can keep your own parking spots in sync across your Apple devices using your <strong>private</strong> iCloud database. This data is stored in your personal iCloud account under Apple's privacy terms — the app's developer cannot see it, and it is not shared with anyone. You can turn this off by signing out of iCloud or disabling iCloud for the app in Settings.</p>
+
+  <h2>What we collect</h2>
+  <p>Nothing. The app has no servers of its own and makes no network requests to us. Because your data never leaves your device (except your own private iCloud, above), we cannot see it, and deleting the app removes it.</p>
+
+  <div class="callout">
+    <strong>About a future optional feature:</strong> A later version may offer an <strong>optional</strong> cloud &ldquo;Smart Scan&rdquo; that sends sign text to an AI service for higher-accuracy interpretation. That feature will be clearly opt-in, and this policy will be updated <em>before</em> it ships to describe exactly what is sent and to whom.
+  </div>
+
+  <h2>Children's privacy</h2>
+  <p>The app is not directed at children and collects no personal information from anyone.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the updated version will be posted here with a new &ldquo;Last updated&rdquo; date.</p>
+
+  <h2>Contact</h2>
+  <div class="contact">
+    Questions about this policy: <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a>
+  </div>
+
+  <footer>© 2026 SOTech. ParkSignal AI.</footer>
+</main>
+</body>
+</html>

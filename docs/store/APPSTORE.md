@@ -19,6 +19,19 @@ Alternatives:
 `Point your camera at any parking sign and ParkSignal reads the rules for you —
 then reminds you before you have to move. All on-device. No account.`
 
+## What's New (version 1.0 release notes, max 4000)
+```
+Welcome to ParkSignal AI 1.0.
+
+• Scan any parking sign with your camera — the rules are read on-device in seconds.
+• A color-coded "parking signal" tells you at a glance whether you can park, and until when.
+• Save your spots on a map, each pin colored by its signal.
+• Set an alarm and get reminded before a restriction starts.
+• 100% private: no account, no tracking, nothing leaves your device. Optional iCloud sync keeps your own spots across your devices.
+
+Thanks for trying ParkSignal. Feedback is welcome via the Support link in Settings.
+```
+
 ## Description (max 4000)
 ```
 Parking signs shouldn't be a puzzle. ParkSignal AI reads them for you.
@@ -69,9 +82,12 @@ posted signs. It doesn't guarantee against citations.
 - Secondary: **Utilities**
 
 ## URLs
-- Support URL: `https://<your-site-or-github-pages>/support` (required — placeholder)
+Host-ready pages are in `docs/legal/` — publish them (e.g. GitHub Pages) and paste the resulting URLs here.
+- Support URL (required): host `docs/legal/support.html` → e.g. `https://<user>.github.io/ParkSignalAIBeta/support.html`
+- Privacy Policy URL (required): host `docs/legal/privacy.html` → e.g. `https://<user>.github.io/ParkSignalAIBeta/privacy.html`
 - Marketing URL (optional): `https://<your-site>`
-- Privacy Policy URL: host `PRIVACY.md` (e.g., GitHub Pages) and paste that URL (required)
+
+> Both pages have `{{SUPPORT_EMAIL}}` and `{{EFFECTIVE_DATE}}` placeholders — fill them before hosting. Enabling GitHub Pages for this repo (Settings → Pages → deploy from `main` / `/docs`) serves everything under `docs/` at `https://<user>.github.io/ParkSignalAIBeta/legal/...`.
 
 ## Age rating
 **4+** — no objectionable content. Questionnaire: None for all categories
@@ -94,12 +110,22 @@ v1 collects **no** data off the device.
 - AlarmKit — "ParkSignal uses alarms to alert you before a parking restriction starts so you can move your car in time."
 
 ## Build / capabilities notes for submission
-- iCloud (CloudKit) + Push capabilities must be enabled on the App ID before an
-  iCloud-syncing build is uploaded (see PR #3). If you submit v1 without iCloud,
-  remove the entitlements first, or ship with the capabilities enabled.
+- **Device family: iPhone only** (`TARGETED_DEVICE_FAMILY = 1`) — no iPad
+  screenshots or iPad review needed.
+- **iCloud (CloudKit)** is enabled and shipping (foreground sync). Before the
+  App Store build, deploy the CloudKit schema Development → Production (see
+  `SUBMISSION_CHECKLIST.md`).
+- **Push Notifications** capability decision is still open (see
+  `SUBMISSION_CHECKLIST.md`). Push is only needed for real-time *background*
+  sync; without it, sync happens when the app is foregrounded. Whatever you
+  choose, the entitlements + provisioning must match the uploaded build.
 - Copyright: `© 2026 SOTech` (adjust).
 
 ## Screenshots
-Provided under `docs/store/screenshots/` (6.9" iPhone: dashboard, map, spot
-detail). See the note in the PR about the alerts screenshot (debug rows) and the
-iPad set (pending the iPhone-only vs universal decision).
+Provided under `docs/store/screenshots/` (6.9" iPhone, native 1320×2868):
+- `iphone69-1-dashboard.png`, `iphone69-2-map.png`, `iphone69-3-spotdetail.png` — ready to upload.
+- `iphone69-4-alerts-DEBUGrows.png` — **do not upload**: captured from a DEBUG
+  build, so it shows developer-only "Test" rows. Recapture from a Release build
+  (or the Alerts screen without debug rows) if you want a 4th screenshot; 1–3
+  clean shots already satisfy Apple's minimum.
+- iPhone-only, so **no iPad screenshots are required**.
