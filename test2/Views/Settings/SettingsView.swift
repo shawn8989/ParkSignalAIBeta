@@ -16,6 +16,12 @@ struct SettingsView: View {
     @AppStorage("feature.liveScannerBeta") private var liveScannerBeta: Bool = false
     #endif
 
+    private var appVersionString: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(v) (\(b))"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -44,6 +50,17 @@ struct SettingsView: View {
                     } label: {
                         Label("Alerts & Alarms", systemImage: "alarm")
                     }
+                }
+
+                Section(header: Text("About")) {
+                    Link(destination: LegalLinks.privacy) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                    Link(destination: LegalLinks.support) {
+                        Label("Support", systemImage: "questionmark.circle")
+                    }
+                    LabeledContent("Version", value: appVersionString)
+                        .accessibilityLabel("Version \(appVersionString)")
                 }
 
                 #if DEBUG
@@ -86,6 +103,14 @@ struct SettingsView: View {
             .navigationTitle("Settings")
         }
     }
+}
+
+// Legal/support links shown in Settings → About. Update the host once the pages
+// in docs/legal/ are published (e.g. GitHub Pages from /docs). See
+// docs/store/SUBMISSION_CHECKLIST.md.
+private enum LegalLinks {
+    static let privacy = URL(string: "https://shawn8989.github.io/ParkSignalAIBeta/legal/privacy.html")!
+    static let support = URL(string: "https://shawn8989.github.io/ParkSignalAIBeta/legal/support.html")!
 }
 
 #if DEBUG
