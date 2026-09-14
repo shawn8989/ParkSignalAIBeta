@@ -3,9 +3,10 @@
 Progress on the autonomous submission-prep goal. Owner-only shipping steps live in
 **`SUBMISSION_CHECKLIST.md`**; this file tracks the engineering work.
 
-_Constraint during this run: the machine's disk was ~100% full (≈1–2 GB free), so
-local Xcode builds were avoided; correctness was verified via **GitHub Actions CI**
-(`Build & Unit Test`), which builds and runs the unit tests on GitHub's runners._
+_The initial arc (items 1–6, PRs #7–#17) ran with the machine's disk ~100% full, so
+those were verified via **GitHub Actions CI**. The later audit arc (#18–#24) ran after
+the disk was freed, so each was built + unit-tested locally and re-checked 0-warnings
+via CI._
 
 ## Done (merged to `main`)
 
@@ -55,8 +56,57 @@ local Xcode builds were avoided; correctness was verified via **GitHub Actions C
   Settings/Form screens already wrap correctly; standard nav/tab controls meet the
   44pt target; contrast checked on the signal surfaces.
 
+## v1.1 quality pass — audit-driven (2026-09-13/14)
+
+A 12-agent code audit (`docs/AUDIT.md`, 83 findings) drove a second arc fixing the
+core correctness bugs. Local builds are back (disk freed) — each PR was built + unit-
+tested locally on the iOS 18.6 simulator and re-verified 0-warnings via CI.
+**All five high-severity clusters are shipped.**
+
+- **Parser v2** — PR #18 (merged). Exceptions/negation ("except weekends" → Mon–Fri),
+  weekday/weekend macros, MON THRU/THROUGH FRI, multiple time windows, spelled-out
+  durations, broader types (no standing/stopping/tow/bus/loading/ADA), stacked-sign
+  handling, + `AIRestriction.needsReview`/`.exceptHolidays`. Cloud AI stays fallback.
+- **Alarm lifecycle** — PR #19 (merged). Edit/delete restriction + delete spot now
+  cancel/reschedule alarms; park alert fires `leadMinutes` BEFORE the restriction;
+  fixed the CarListView no-op cancel id.
+- **Confirm-before-schedule** — PR #20 (merged). `AnalysisConfirmationView` is editable
+  (type/days/times) and surfaces `needsReview`; QuickScan (Dashboard) routed through it
+  instead of auto-committing with no alarm.
+- **Overnight eval** — PR #21 (merged). New `DateTimeUtils.isWindowActive` (checks
+  today+yesterday) fixes the after-midnight false-GREEN; consolidated 5 duplicated
+  `isActive` copies; `daysMask==0` = every day everywhere.
+- **Driving-side / dedup** — PR #22 (merged). Curb side inferred from address parity;
+  `SpotMergeService` dedups by street + proximity + side (opposite sides never merge,
+  no more duplicate pins, coordinate not overwritten).
+- **Photo sync** — PR #23 (**OPEN — review**). `PhotoBlob` external-storage model syncs
+  photo bytes via CloudKit; rehydrates on a cache miss. Left open because it adds a
+  CloudKit schema field (owner's call; include it when deploying Dev→Prod).
+- **Re-analysis alarm cleanup** — PR #24 (**OPEN — review**). Re-analyzing a scan now
+  cancels the old restrictions' alarms before deleting them (no orphaned notifications).
+
+Tests grew to **95** (unit-only, all green, 0 warnings).
+
 ## Remaining / deferred
 
+### From the audit (`docs/AUDIT.md`) — medium/low, not yet done
+- **Alarm/restriction integrity (batch A):** alarms aren't re-established after iCloud
+  sync or relaunch (only scheduled at scan/edit time); in-spot Re-Analyze appends
+  duplicate restrictions (needs a replace-vs-add decision); editing OCR + Save (not
+  Analyze) leaves restrictions stale; changing lead time doesn't reschedule;
+  `currentDeviceCoordinate()` uses a throwaway `CLLocationManager` (often nil);
+  `deleteSpot` orphans photo files (quick once #23 lands); off-main SwiftData access in
+  a notification completion handler.
+- **Parser depth (batch B):** nth-weekday-of-month ("1st & 3rd Tue") is unsupported —
+  the biggest parser gap (needs a model concept + eval + alarm support); wire
+  `needsReview` into the review screen (earlier correction point).
+- **Map/segment editor (batch C):** heading never captured (curb-ribbon left/right is
+  parity-approximated); MapView renders every scan globally; segment-editor bugs
+  (drag force-sets side to "right", Cancel doesn't roll back, all handles at once,
+  overshoot, overlapping gestures).
+- 15 low-severity polish items (dead code, cosmetics, minor UX).
+
+### Original goal
 - **6. Accessibility (minor cosmetic left):** at the very largest accessibility
   text size the Dashboard **map legend overlay grows large and overlaps** the map /
   the "City Data Active" line — everything is still fully readable (no truncation),
@@ -67,12 +117,15 @@ local Xcode builds were avoided; correctness was verified via **GitHub Actions C
   proxy endpoint which are owner/infra decisions).
 
 ## Next steps (recommended order)
-1. On-device accessibility audit (Dynamic Type + tap targets + contrast).
-2. The owner steps in `SUBMISSION_CHECKLIST.md` (Push decision → create/deploy
-   CloudKit schema → host pages → ASC record → archive → submit).
-3. (Post-launch) Phase 3 monetization.
+1. Review + merge the open PRs: **#23 photo sync** (acknowledge the CloudKit schema
+   field) and **#24 re-analysis alarm cleanup**.
+2. **Batch A (alarm/restriction integrity)** — highest value; makes alarms trustworthy
+   on a real device (reconcile alarms on launch/after sync, re-analysis dedup, lead-time
+   reschedule, real device coordinate, deleteSpot photo cleanup).
+3. **Batch B — nth-weekday parser support** (street-cleaning is a core use case).
+4. Batch C (map/segment editor + heading capture) and the low-severity polish.
+5. Owner steps in `SUBMISSION_CHECKLIST.md` (Push decision → create/deploy CloudKit
+   schema → host pages → ASC record → archive → submit).
+6. (Post-launch) Phase 3 monetization (StoreKit + AI proxy).
 
-_Note: local Xcode builds were avoided all run because the machine's disk was ~100%
-full (≈1–2 GB free); everything was verified via GitHub Actions CI, including a
-zero-warning check by grepping the build log. Freeing space (e.g. the regenerable
-`~/Library/Developer/Xcode/DerivedData`) restores fast local builds._
+_The full ranked backlog is in `docs/AUDIT.md`._
