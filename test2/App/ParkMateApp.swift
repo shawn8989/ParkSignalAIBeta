@@ -37,7 +37,7 @@ struct ParkMateApp: App {
 
         let schema = Schema([
             User.self, Car.self, ParkingSpot.self, Restriction.self,
-            CurrentParking.self, ParkSession.self, SignScan.self
+            CurrentParking.self, ParkSession.self, SignScan.self, PhotoBlob.self
         ])
         // Sync the user's own data across their devices via the CloudKit private
         // database (iCloud identity is the "account" — no login needed).

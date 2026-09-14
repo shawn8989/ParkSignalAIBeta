@@ -19,6 +19,7 @@ struct ParkingSignScannerView: View {
     var onRequestQuickScan: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
@@ -204,7 +205,7 @@ struct ParkingSignScannerView: View {
                 CameraPicker { image in
                     // Save image via ImageStore and remember filename
                     self.capturedImage = image
-                    if let name = try? ImageStore.saveJPEG(image) {
+                    if let name = try? ImageStore.saveJPEG(image, context: modelContext) {
                         self.capturedFilename = name
                     }
                     if self.pendingLockAnalyze {
