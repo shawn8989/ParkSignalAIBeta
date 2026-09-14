@@ -501,3 +501,23 @@ extension String {
     }
 }
 
+// MARK: - Synced photo storage
+
+/// Image bytes for a saved photo, keyed by its on-disk filename. This is what makes
+/// photos sync: SwiftData ships the `.externalStorage` blob through CloudKit as an
+/// asset, so a scan's sign photo is available on the user's other devices (the local
+/// file is just a fast cache). CloudKit forbids unique constraints, so uniqueness of
+/// `filename` is enforced in code (ImageStore upserts).
+@Model
+final class PhotoBlob {
+    var filename: String = ""
+    @Attribute(.externalStorage) var data: Data?
+    var createdAt: Date = Date.now
+
+    init(filename: String, data: Data?) {
+        self.filename = filename
+        self.data = data
+        self.createdAt = Date.now
+    }
+}
+

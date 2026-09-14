@@ -960,7 +960,7 @@ struct ParkingSpotDetailView: View {
                     .foregroundColor(.secondary)
             }
             if let filename = spot.lastScanPhotoFilename {
-                if let img = ImageStore.loadImage(named: filename) {
+                if let img = ImageStore.loadImage(named: filename, context: context) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFit()

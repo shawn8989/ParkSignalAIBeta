@@ -1,7 +1,9 @@
 import SwiftUI
 import UIKit
+import SwiftData
 
 struct QuickScanReviewView: View {
+    @Environment(\.modelContext) private var context
     // Initial seed image/OCR (optional). The view manages a multi‑photo session.
     let image: UIImage
     var ocrPreview: String?
@@ -145,7 +147,7 @@ struct QuickScanReviewView: View {
         defer { working = false }
         var filenames: [String] = []
         for img in images {
-            if let name = try? ImageStore.saveJPEG(img) {
+            if let name = try? ImageStore.saveJPEG(img, context: context) {
                 filenames.append(name)
             }
         }

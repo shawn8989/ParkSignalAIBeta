@@ -270,7 +270,10 @@ struct SignScanEditView: View {
                 }
             }
 
-            // Clear old restrictions linked to this scan
+            // Clear old restrictions linked to this scan, cancelling their scheduled
+            // alarms first so re-analysis doesn't leave orphaned repeating notifications.
+            let oldRestrictionIDs = scan.restrictions.map { $0.id }
+            await NotificationManager.shared.cancel(forRestrictionIDs: oldRestrictionIDs)
             for r in scan.restrictions { modelContext.delete(r) }
             scan.restrictions.removeAll()
 

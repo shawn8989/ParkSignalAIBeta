@@ -18,7 +18,7 @@ struct SpotPhotosView: View {
             } else {
                 ForEach(spot.streetPhotoFilenames, id: \.self) { filename in
                     HStack {
-                        if let image = ImageStore.loadImage(named: filename) {
+                        if let image = ImageStore.loadImage(named: filename, context: context) {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
@@ -36,7 +36,7 @@ struct SpotPhotosView: View {
                 }
                 .onDelete { indexSet in
                     let names = indexSet.map { spot.streetPhotoFilenames[$0] }
-                    for n in names { ImageStore.deleteImage(named: n) }
+                    for n in names { ImageStore.deleteImage(named: n, context: context) }
                     spot.streetPhotoFilenames.remove(atOffsets: indexSet)
                     try? context.save()
                 }
@@ -72,7 +72,7 @@ struct SpotPhotosView: View {
         guard let item else { return }
         do {
             if let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                if let filename = try? ImageStore.saveJPEG(image) {
+                if let filename = try? ImageStore.saveJPEG(image, context: context) {
                     spot.addStreetPhoto(filename: filename)
                     try? context.save()
                 }
@@ -82,7 +82,7 @@ struct SpotPhotosView: View {
 
     private func saveTakenImage() async {
         guard let image = takenImage else { return }
-        if let filename = try? ImageStore.saveJPEG(image) {
+        if let filename = try? ImageStore.saveJPEG(image, context: context) {
             spot.addStreetPhoto(filename: filename)
             try? context.save()
         }
