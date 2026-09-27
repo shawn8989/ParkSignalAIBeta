@@ -69,6 +69,7 @@ struct ParkingSpotDetailView: View {
     
     @Query private var cars: [Car]
     @State private var selectedCarID: UUID? = nil
+    @StateObject private var locationManager = LocationManager()
 
     // Auto-created or matched spot to edit after scan
     @State private var newSpotForEdit: ParkingSpot? = nil
@@ -276,7 +277,7 @@ struct ParkingSpotDetailView: View {
                     onSubmit: { mergedText, filenames in
                         Task { @MainActor in
                             // Resolve coordinate and reverse geocode to an address label
-                            let coord = currentDeviceCoordinate() ?? spotCoordinate
+                            let coord = locationManager.lastLocation?.coordinate ?? spotCoordinate
                             let address = await reverseGeocode(coord)
 
                             // Find or create a ParkingSpot by normalized address (main actor)
@@ -469,6 +470,10 @@ struct ParkingSpotDetailView: View {
                 selectedCarID = current
             }
             refreshPendingAlerts()
+            locationManager.ensureAuthorized()
+        }
+        .onDisappear {
+            locationManager.stopUpdatingLocation()
         }
         .onChange(of: spot.parkSessions.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _, _ in
             refreshPendingAlerts()
@@ -803,8 +808,7 @@ struct ParkingSpotDetailView: View {
                         Spacer()
 
                         Button {
-                            // Use device location as center if available
-                            if let c = currentDeviceCoordinate() {
+                            if let c = locationManager.lastLocation?.coordinate {
                                 scan.segmentCenterLat = c.latitude
                                 scan.segmentCenterLon = c.longitude
                                 try? context.save()
@@ -812,6 +816,12 @@ struct ParkingSpotDetailView: View {
                         } label: {
                             Label("Use My Location", systemImage: "location")
                         }
+                        .disabled(locationManager.lastLocation == nil)
+                    }
+                    if locationManager.lastLocation == nil {
+                        Text("Waiting for your location — allow Location access to use “Use My Location”.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
                     }
 
                     HStack {
@@ -1313,11 +1323,6 @@ struct ParkingSpotDetailView: View {
                 showSchedulePrompt = true
             }
         } catch { }
-    }
-
-    private func currentDeviceCoordinate() -> CLLocationCoordinate2D? {
-        let manager = CLLocationManager()
-        return manager.location?.coordinate
     }
 
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> String? {
