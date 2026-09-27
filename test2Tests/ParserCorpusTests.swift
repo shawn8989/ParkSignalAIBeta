@@ -111,6 +111,7 @@ struct ParserCorpusTests {
         var passed = 0
         var regressions: [String] = []
         var nowPassing: [String] = []
+        var report: [String] = []
 
         for entry in corpus.entries {
             let text = try await ocrText(for: entry)
@@ -128,17 +129,23 @@ struct ParserCorpusTests {
             if ok && entry.knownFailing { nowPassing.append(entry.id) }
 
             let flag = ok ? "PASS" : (entry.knownFailing ? "KNOWN" : "FAIL")
-            print("CORPUS|\(flag)|\(entry.id)|expected: \(expected.map(\.description).joined(separator: "; "))|actual: \(actual.map(\.description).joined(separator: "; "))")
+            report.append("CORPUS|\(flag)|\(entry.id)|expected: \(expected.map(\.description).joined(separator: "; "))|actual: \(actual.map(\.description).joined(separator: "; "))")
         }
 
         let total = corpus.entries.count
         let pct = total == 0 ? 0 : Double(passed) / Double(total) * 100
-        print(String(format: "CORPUS|SUMMARY|%d/%d signs parsed correctly (%.1f%%)", passed, total, pct))
+        report.append(String(format: "CORPUS|SUMMARY|%d/%d signs parsed correctly (%.1f%%)", passed, total, pct))
         if !nowPassing.isEmpty {
-            print("CORPUS|NOW-PASSING|mark these knownFailing=false: \(nowPassing.joined(separator: ", "))")
+            report.append("CORPUS|NOW-PASSING|mark these knownFailing=false: \(nowPassing.joined(separator: ", "))")
+        }
+        let text = report.joined(separator: "\n")
+        print(text)
+        // CI sets TEST_RUNNER_CORPUS_REPORT_PATH; xcodebuild strips the prefix for the test process.
+        if let path = ProcessInfo.processInfo.environment["CORPUS_REPORT_PATH"], !path.isEmpty {
+            try? text.write(toFile: path, atomically: true, encoding: .utf8)
         }
 
-        #expect(regressions.isEmpty, "Parser regressed on: \(regressions.joined(separator: ", "))")
+        #expect(regressions.isEmpty, "Parser regressed on: \(regressions.joined(separator: ", "))\n\(text)")
     }
 }
 #endif

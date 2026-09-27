@@ -3,6 +3,7 @@ import SwiftData
 import UserNotifications
 
 /// Notification/alarm side effects of parking, behind a protocol so tests can observe them.
+@MainActor
 protocol ParkingAlerts {
     func scheduleSpotReminders(for spot: ParkingSpot) async
     func cancelSpotReminders(for spot: ParkingSpot) async
@@ -36,8 +37,7 @@ struct ParkingSessionService {
 
     /// Park `car` (or a car-less session when nil) at `spot`, replacing its previous session.
     /// - Parameter scheduleMoveAlert: nil follows the user's auto-schedule setting.
-    @discardableResult
-    func park(_ car: Car?, at spot: ParkingSpot, scheduleMoveAlert: Bool? = nil, now: Date = Date()) async -> ParkSession {
+    func park(_ car: Car?, at spot: ParkingSpot, scheduleMoveAlert: Bool? = nil, now: Date = Date()) async {
         let replaced = openSessions().filter { belongs($0, to: car) }
         for s in replaced { s.endedAt = now }
 
@@ -53,7 +53,6 @@ struct ParkingSessionService {
         if let car, wantsMoveAlert {
             await alerts.scheduleMoveAlert(for: car, at: spot)
         }
-        return session
     }
 
     /// End `car`'s open session (car-less sessions when nil), optionally only at `spot`.
