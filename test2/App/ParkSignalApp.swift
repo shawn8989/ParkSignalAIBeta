@@ -29,7 +29,7 @@ final class AppNotificationDelegate: NSObject, UNUserNotificationCenterDelegate 
 }
 
 @main
-struct ParkMateApp: App {
+struct ParkSignalApp: App {
     let sharedModelContainer: ModelContainer
 
     init() {

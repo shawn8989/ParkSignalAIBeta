@@ -30,7 +30,7 @@ struct ModelPersistenceTests {
         let container = try makeContainer()
         let ctx = container.mainContext
 
-        let user = User(username: "shawn", email: "s@example.com", passwordHash: "x".sha256)
+        let user = User(username: "shawn", email: "s@example.com", passwordHash: "")
         let car = Car(nickname: "Civic", owner: user)
         let spot = ParkingSpot(location: "1 Test St", latitude: 1.0, longitude: 2.0, streetSide: "right")
         let restriction = Restriction(type: .noParking, startTime: Date(), endTime: Date(),

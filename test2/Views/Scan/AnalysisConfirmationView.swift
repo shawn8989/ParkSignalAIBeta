@@ -8,6 +8,7 @@ import SwiftData
 struct AnalysisConfirmationView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query private var cars: [Car]
 
     let spot: ParkingSpot
     let sourceUser: UUID
@@ -256,13 +257,15 @@ struct AnalysisConfirmationView: View {
             } else {
                 context.insert(CurrentParking(spotID: spot.id, parkedAt: Date()))
             }
-            if #available(iOS 17.0, *) {
-                let openFetch = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
-                for s in try context.fetch(openFetch) { s.endedAt = Date() }
+            // Never touch other cars' sessions. With a single car the scan is
+            // unambiguous, so park that car here; otherwise track a car-less session.
+            if cars.count == 1 {
+                cars[0].startParking(at: spot, in: context)
             } else {
-                for s in try context.fetch(FetchDescriptor<ParkSession>()) where s.endedAt == nil { s.endedAt = Date() }
+                let open = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
+                for s in try context.fetch(open) where s.car == nil { s.endedAt = Date() }
+                context.insert(ParkSession(spot: spot, startedAt: Date(), endedAt: nil))
             }
-            context.insert(ParkSession(spot: spot, startedAt: Date(), endedAt: nil))
             try context.save()
         } catch {
             // Non-fatal: tracking failed

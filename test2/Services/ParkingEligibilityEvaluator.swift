@@ -90,41 +90,18 @@ enum ParkingEligibilityEvaluator {
 
     private static func nextRestrictionDate(spotRestrictions: [Restriction], cityRestrictions: [CityRestriction], from now: Date) -> Date? {
         let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        // Spot restrictions
-        for r in spotRestrictions {
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
-            }
+        func next(_ days: [Int], _ hour: Int, _ minute: Int) -> Date? {
+            // Empty days mean "every day", matching `DateTimeUtils.isWindowActive`.
+            DateTimeUtils.nextOccurrence(daysOfWeek: days.isEmpty ? Array(0...6) : days,
+                                         hour: hour, minute: minute,
+                                         from: now, calendar: cal, lookaheadDays: 13)
         }
-        // City restrictions
-        for cr in cityRestrictions {
-            let days = cr.daysOfWeek.isEmpty ? Array(0...6) : cr.daysOfWeek
-            guard let s = DateTimeUtils.parseHHmm(cr.startTime) else { continue }
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = s.0; comps.minute = s.1; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
-            }
+        let spotStarts = spotRestrictions.compactMap { r in
+            next(r.daysOfWeek, cal.component(.hour, from: r.startTime), cal.component(.minute, from: r.startTime))
         }
-        return best
+        let cityStarts = cityRestrictions.compactMap { cr in
+            DateTimeUtils.parseHHmm(cr.startTime).flatMap { t in next(cr.daysOfWeek, t.hour, t.minute) }
+        }
+        return (spotStarts + cityStarts).min()
     }
 }

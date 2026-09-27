@@ -309,7 +309,7 @@ struct SignScanEditView: View {
                     startTime: startDate,
                     endTime: endDate,
                     daysOfWeek: r.daysOfWeek,
-                    sourceUser: UUID(),
+                    sourceUser: LocalIdentity.userID,
                     signPhotoFilename: scan.photoFilenames.first ?? scan.photoFilename,
                     ocrText: text,
                     spot: scan.spot,

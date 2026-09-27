@@ -428,16 +428,15 @@ struct CarListView: View {
     }
 
     private func endParking(for car: Car) {
+        let previousSpot = car.activeSession?.spot
         car.endCurrentParking(at: Date())
         try? context.save()
         saveLastUsed(car)
 
-        // Cancel any previously scheduled weekly notifications for the last spot of this car (best-effort)
-        if car.activeSession?.spot != nil { // if still active (shouldn't be), skip cancel
-        } else {
-            // We don't know the last spot directly; as a simple approach, cancel for all spots with active sessions ended now
-            // (In a future refactor, track CurrentParking to know the last spot directly.)
-            // For now, this is a no-op because schedule uses per-restriction identifiers; cancel will be called when moving/starting elsewhere.
+        cancelNextRestrictionNotification(for: car)
+        // The spot's weekly reminders exist for whoever is parked there; drop them once nobody is.
+        if let spot = previousSpot, !spot.parkSessions.contains(where: { $0.endedAt == nil }) {
+            Task { await NotificationManager.shared.cancel(for: spot.restrictions, spot: spot) }
         }
     }
 

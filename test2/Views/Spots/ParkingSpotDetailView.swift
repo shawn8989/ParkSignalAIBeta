@@ -19,7 +19,7 @@ struct ParkingSpotDetailView: View {
         startTime: Date(),
         endTime: Date(),
         daysOfWeek: [],
-        sourceUser: UUID()
+        sourceUser: LocalIdentity.userID
     )
     @State private var showEditSpot = false
     @State private var showCarPickerSheet = false
@@ -1243,7 +1243,7 @@ struct ParkingSpotDetailView: View {
             let startDate = DateTimeUtils.todayAt(hour: start.0, minute: start.1)
             var endDate = DateTimeUtils.todayAt(hour: end.0, minute: end.1)
             if endDate <= startDate { endDate = endDate.addingTimeInterval(24*60*60) }
-            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: UUID(), signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
+            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: LocalIdentity.userID, signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
             context.insert(r)
             spot.restrictions.append(r)
         }
@@ -1282,7 +1282,7 @@ struct ParkingSpotDetailView: View {
             let startDate = DateTimeUtils.todayAt(hour: start.0, minute: start.1)
             var endDate = DateTimeUtils.todayAt(hour: end.0, minute: end.1)
             if endDate <= startDate { endDate = endDate.addingTimeInterval(24 * 60 * 60) }
-            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: UUID(), signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
+            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: LocalIdentity.userID, signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
             context.insert(r)
             spot.restrictions.append(r)
         }
