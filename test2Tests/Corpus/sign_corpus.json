@@ -7,8 +7,8 @@
       "source": "NYC",
       "ocrText": "NO PARKING\n8:30AM-10AM\nTUESDAY",
       "expected": [{ "type": "street_cleaning", "days": [2], "start": "08:30", "end": "10:00" }],
-      "knownFailing": false,
-      "notes": "Alternate-side sign: the broom symbol means street cleaning, but OCR only sees NO PARKING."
+      "knownFailing": true,
+      "notes": "Alternate-side sign: the broom symbol means street cleaning, but OCR only sees NO PARKING. Parser gap: Types it no_parking: the broom symbol isn't in the OCR text."
     },
     {
       "id": "nyc-no-standing-anytime",
@@ -29,7 +29,8 @@
       "source": "NYC",
       "ocrText": "2 HOUR METERED PARKING\n9AM-7PM\nEXCEPT SUNDAY",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "09:00", "end": "19:00", "durationMinutes": 120 }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Drops the 2-hour limit when the sign also has a time window."
     },
     {
       "id": "nyc-no-standing-two-windows",
@@ -82,8 +83,8 @@
       "source": "SF",
       "ocrText": "2 HOUR PARKING\n8AM-6PM\nMON THRU SAT\nEXCEPT VEHICLES WITH AREA S PERMITS",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "08:00", "end": "18:00", "durationMinutes": 120 }],
-      "knownFailing": false,
-      "notes": "For a non-permit driver this is a 2-hour limit; the permit exemption doesn't make it permit-only."
+      "knownFailing": true,
+      "notes": "For a non-permit driver this is a 2-hour limit; the permit exemption doesn't make it permit-only. Parser gap: The permit exemption makes it permit-only, and the 2-hour limit is dropped."
     },
     {
       "id": "sf-tow-away-am-rush",
@@ -97,7 +98,8 @@
       "source": "SF",
       "ocrText": "1 HOUR PARKING\n9AM-6PM\nMON-SAT",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "09:00", "end": "18:00", "durationMinutes": 60 }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Drops the 1-hour limit when the sign also has a time window."
     },
     {
       "id": "sf-sweeping-tue-noon",
@@ -111,7 +113,8 @@
       "source": "LA",
       "ocrText": "NO PARKING\n10AM TO 12 NOON\nTUESDAY\nSTREET CLEANING",
       "expected": [{ "type": "street_cleaning", "days": [2], "start": "10:00", "end": "12:00" }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Reads '12 NOON' as midnight (10:00-00:00)."
     },
     {
       "id": "la-rush-hour-two-windows",
@@ -128,7 +131,8 @@
       "source": "LA",
       "ocrText": "2 HR PARKING\n8AM-6PM\nEXCEPT SUNDAY",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "08:00", "end": "18:00", "durationMinutes": 120 }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Drops the 2-hour limit when the sign also has a time window."
     },
     {
       "id": "la-sweeping-monday",
@@ -149,15 +153,16 @@
       "source": "Chicago",
       "ocrText": "NO PARKING\nTOW ZONE\n7AM-9AM\nMON-FRI",
       "expected": [{ "type": "no_parking", "days": [1, 2, 3, 4, 5], "start": "07:00", "end": "09:00" }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: The window is lost when 'TOW ZONE' is on its own line; parsed as anytime."
     },
     {
       "id": "chi-winter-overnight-seasonal",
       "source": "Chicago",
       "ocrText": "NO PARKING\n3AM-7AM\nDEC 1 - APR 1\nWINTER",
       "expected": [{ "type": "no_parking", "days": [], "start": "03:00", "end": "07:00" }],
-      "knownFailing": false,
-      "notes": "Seasonal dates aren't modeled; the daily window is the representable part."
+      "knownFailing": true,
+      "notes": "Seasonal dates aren't modeled; the daily window is the representable part. Parser gap: The date range 'DEC 1 - APR 1' adds a bogus 01:00-01:00 window."
     },
     {
       "id": "chi-permit-zone-overnight",
@@ -185,46 +190,48 @@
       "source": "Boston",
       "ocrText": "STREET CLEANING\n1ST TUESDAY\nAPRIL-NOVEMBER\n8AM-12NOON\nTOW ZONE",
       "expected": [{ "type": "street_cleaning", "days": [2], "start": "08:00", "end": "12:00" }],
-      "knownFailing": false,
-      "notes": "1st Tuesday and the season aren't modeled; every Tuesday is the closest representable rule."
+      "knownFailing": true,
+      "notes": "1st Tuesday and the season aren't modeled; every Tuesday is the closest representable rule. Parser gap: Reads '12NOON' as midnight (08:00-00:00)."
     },
     {
       "id": "bos-2hr-mon-sat",
       "source": "Boston",
       "ocrText": "2 HOUR PARKING\n8AM-6PM\nMON-SAT",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "08:00", "end": "18:00", "durationMinutes": 120 }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Drops the 2-hour limit when the sign also has a time window."
     },
     {
       "id": "bos-loading-zone",
       "source": "Boston",
       "ocrText": "NO PARKING\nLOADING ZONE\n7AM-4PM",
       "expected": [{ "type": "no_parking", "days": [], "start": "07:00", "end": "16:00" }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: The window is lost when 'LOADING ZONE' is on its own line; parsed as anytime."
     },
     {
       "id": "audit-bare-10-6",
       "source": "AUDIT",
       "ocrText": "NO PARKING 10-6",
       "expected": [{ "type": "no_parking", "days": [], "start": "10:00", "end": "18:00" }],
-      "knownFailing": false,
-      "notes": "docs/AUDIT.md: bare 10-6 reads as 10:00-06:00."
+      "knownFailing": true,
+      "notes": "docs/AUDIT.md: bare 10-6 reads as 10:00-06:00. Parser gap: Bare '10-6' reads as 10:00-06:00."
     },
     {
       "id": "audit-8am-5",
       "source": "AUDIT",
       "ocrText": "2 HOUR PARKING 8AM-5",
       "expected": [{ "type": "metered", "days": [], "start": "08:00", "end": "17:00", "durationMinutes": 120 }],
-      "knownFailing": false,
-      "notes": "docs/AUDIT.md: 8AM-5 infers the end as 05:00."
+      "knownFailing": true,
+      "notes": "docs/AUDIT.md: 8AM-5 infers the end as 05:00. Parser gap: '8AM-5' ends at 05:00, and the 2-hour limit is dropped."
     },
     {
       "id": "audit-single-time-after",
       "source": "AUDIT",
       "ocrText": "NO PARKING AFTER 6PM",
       "expected": [{ "type": "no_parking", "days": [], "start": "18:00", "end": "00:00" }],
-      "knownFailing": false,
-      "notes": "docs/AUDIT.md: single-time signs are dropped. Meaning: 6 PM until midnight."
+      "knownFailing": true,
+      "notes": "docs/AUDIT.md: single-time signs are dropped. Meaning: 6 PM until midnight. Parser gap: Single time 'AFTER 6PM' becomes anytime."
     },
     {
       "id": "gen-no-parking-anytime",
@@ -259,8 +266,8 @@
       "source": "Generic",
       "ocrText": "NO PARKING\nSCHOOL DAYS\n7AM-4PM",
       "expected": [{ "type": "no_parking", "days": [1, 2, 3, 4, 5], "start": "07:00", "end": "16:00" }],
-      "knownFailing": false,
-      "notes": "School days aren't modeled; weekdays is the closest representable rule."
+      "knownFailing": true,
+      "notes": "School days aren't modeled; weekdays is the closest representable rule. Parser gap: 'SCHOOL DAYS' isn't understood; applies every day."
     },
     {
       "id": "gen-overnight-9pm-6am",
@@ -289,14 +296,16 @@
       "source": "Generic",
       "ocrText": "NO PARKING\n8AM-10AM\nWEEKDAYS\nHOLIDAYS EXCEPTED",
       "expected": [{ "type": "no_parking", "days": [1, 2, 3, 4, 5], "start": "08:00", "end": "10:00", "exceptHolidays": true }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: 'HOLIDAYS EXCEPTED' inverts WEEKDAYS to weekends ([0,6]); shows green when you'd be ticketed."
     },
     {
       "id": "gen-meter-2hr-sundays-holidays",
       "source": "Generic",
       "ocrText": "METER PARKING\n2 HOUR LIMIT\n9AM-6PM\nSUNDAYS AND HOLIDAYS EXCEPTED",
       "expected": [{ "type": "metered", "days": [1, 2, 3, 4, 5, 6], "start": "09:00", "end": "18:00", "durationMinutes": 120, "exceptHolidays": true }],
-      "knownFailing": false
+      "knownFailing": true,
+      "notes": "Parser gap: Drops the 2-hour limit when the sign also has a time window."
     },
     {
       "id": "gen-cleaning-thursday-half-hours",
@@ -310,8 +319,8 @@
       "source": "Generic",
       "ocrText": "NO STANDING\nEXCEPT TRUCKS LOADING\n7AM-7PM\nMON-FRI",
       "expected": [{ "type": "no_parking", "days": [1, 2, 3, 4, 5], "start": "07:00", "end": "19:00" }],
-      "knownFailing": false,
-      "notes": "The EXCEPT exempts trucks, not days."
+      "knownFailing": true,
+      "notes": "The EXCEPT exempts trucks, not days. Parser gap: 'EXCEPT TRUCKS' is read as a day exception and inverts MON-FRI to weekends."
     }
   ]
 }
