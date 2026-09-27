@@ -234,8 +234,8 @@ struct AnalysisConfirmationView: View {
         }
 
         if setAsCurrentParking {
-            setCurrentParking(to: spot)
-            await NotificationManager.shared.schedule(for: created, spot: spot)
+            // Parking schedules the spot's weekly reminders, including the ones just created.
+            await setCurrentParking(to: spot)
             for (item, r) in zip(items.filter { $0.include }, created) where item.durationMinutes != nil {
                 let seconds = max(60.0, TimeInterval((item.durationMinutes ?? 0) * 60))
                 Task {
@@ -248,28 +248,17 @@ struct AnalysisConfirmationView: View {
         dismiss()
     }
 
-    private func setCurrentParking(to spot: ParkingSpot) {
-        do {
-            let existingCurrent = try context.fetch(FetchDescriptor<CurrentParking>())
-            if let first = existingCurrent.first {
-                first.spotID = spot.id
-                first.parkedAt = Date()
-            } else {
-                context.insert(CurrentParking(spotID: spot.id, parkedAt: Date()))
-            }
-            // Never touch other cars' sessions. With a single car the scan is
-            // unambiguous, so park that car here; otherwise track a car-less session.
-            if cars.count == 1 {
-                cars[0].startParking(at: spot, in: context)
-            } else {
-                let open = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
-                for s in try context.fetch(open) where s.car == nil { s.endedAt = Date() }
-                context.insert(ParkSession(spot: spot, startedAt: Date(), endedAt: nil))
-            }
-            try context.save()
-        } catch {
-            // Non-fatal: tracking failed
+    private func setCurrentParking(to spot: ParkingSpot) async {
+        if let existing = try? context.fetch(FetchDescriptor<CurrentParking>()).first {
+            existing.spotID = spot.id
+            existing.parkedAt = Date()
+        } else {
+            context.insert(CurrentParking(spotID: spot.id, parkedAt: Date()))
         }
+        // With a single car the scan is unambiguous, so park that car here;
+        // otherwise track a car-less session. Other cars' sessions are never touched.
+        let car = cars.count == 1 ? cars[0] : nil
+        await ParkingSessionService(context: context).park(car, at: spot)
     }
 
     private func mapType(_ type: AIRestrictionType) -> RestrictionType? {

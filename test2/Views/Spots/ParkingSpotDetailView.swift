@@ -79,7 +79,7 @@ struct ParkingSpotDetailView: View {
     @State private var showSchedulePrompt: Bool = false
     @State private var promptCar: Car? = nil
     @State private var nextRestrictionForPrompt: Date? = nil
-    @State private var pendingAlerts: [String: Date] = [:] // carID.uuidString -> next fire date
+    @State private var pendingAlerts: [UUID: Date] = [:] // carID -> next move-alert fire date
 
     private var currentUserID: UUID? {
         LocalIdentity.userID
@@ -425,7 +425,7 @@ struct ParkingSpotDetailView: View {
                         } else {
                             ForEach(cars, id: \.id) { car in
                                 Button {
-                                    startParking(for: car)
+                                    park(car)
                                     showCarPickerSheet = false
                                 } label: {
                                     HStack(spacing: 12) {
@@ -480,7 +480,7 @@ struct ParkingSpotDetailView: View {
         }
         .alert("Schedule Alert?", isPresented: $showSchedulePrompt) {
             Button("Schedule") {
-                if let car = promptCar { scheduleNextRestrictionNotification(for: car, at: spot); refreshPendingAlerts() }
+                if let car = promptCar { scheduleMoveAlert(for: car) }
                 promptCar = nil
             }
             Button("Not now", role: .cancel) { promptCar = nil }
@@ -540,7 +540,7 @@ struct ParkingSpotDetailView: View {
                         .foregroundStyle(.green)
                 }
                 Button(role: .destructive) {
-                    endGenericParking()
+                    endAllParkingHere()
                 } label: {
                     Label("End Parking", systemImage: "xmark.circle")
                 }
@@ -588,8 +588,7 @@ struct ParkingSpotDetailView: View {
             } else {
                 ForEach(activeCarSessions, id: \.id) { sess in
                     if let car = sess.car {
-                        let key = car.id.uuidString
-                        let fire = pendingAlerts[key]
+                        let fire = pendingAlerts[car.id]
                         HStack {
                             Image(systemName: car.iconName).foregroundStyle(.tint)
                             VStack(alignment: .leading) {
@@ -599,10 +598,10 @@ struct ParkingSpotDetailView: View {
                             }
                             Spacer()
                             if fire == nil {
-                                Button("Schedule") { scheduleNextRestrictionNotification(for: car, at: spot); refreshPendingAlerts() }
+                                Button("Schedule") { scheduleMoveAlert(for: car) }
                                     .buttonStyle(.bordered)
                             } else {
-                                Button("Cancel") { cancelAlert(for: car); refreshPendingAlerts() }
+                                Button("Cancel") { cancelMoveAlert(for: car) }
                                     .buttonStyle(.bordered)
                             }
                         }
@@ -1095,88 +1094,52 @@ struct ParkingSpotDetailView: View {
         }
     }
 
+    private var sessions: ParkingSessionService { ParkingSessionService(context: context) }
+
     private func assignSelectedCar() {
         guard let selID = selectedCarID, let car = cars.first(where: { $0.id == selID }) else { return }
-        do {
-            // End any active session for this car
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == car.id && s.endedAt == nil { s.endedAt = Date() }
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: car)
-            context.insert(session)
-            try context.save()
-            if autoScheduleOnPark {
-                scheduleNextRestrictionNotification(for: car, at: spot)
-            } else {
+        park(car)
+    }
+
+    /// Park `car` here; without auto-scheduling, offer to schedule its move alert.
+    private func park(_ car: Car) {
+        Task {
+            await sessions.park(car, at: spot)
+            if !autoScheduleOnPark {
                 promptCar = car
                 nextRestrictionForPrompt = spot.nextRestrictionDate()
                 showSchedulePrompt = true
             }
-        } catch { }
-    }
-
-    private func endParking(for carID: UUID) {
-        do {
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == carID && s.spot?.id == spot.id && s.endedAt == nil { s.endedAt = Date() }
-            try context.save()
-        } catch { }
-    }
-
-    private func scheduleNextRestrictionNotification(for car: Car, at spot: ParkingSpot) {
-        guard let start = spot.nextRestrictionDate() else { return }
-        // Fire the alert the user's lead time BEFORE the restriction starts (not at start).
-        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
-        let next = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
-        let center = UNUserNotificationCenter.current()
-        let id = "nextRestriction.car.\(car.id.uuidString).spot.\(spot.id.uuidString)"
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-        let content = UNMutableNotificationContent()
-        content.title = "Move your \(car.nickname)"
-        content.body = "Restriction at \(spot.location) starts soon."
-        content.sound = .default
-        if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: next)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        center.add(req)
-        // Save routing metadata as well for AlarmService to match
-        Task { @MainActor in
-            AlarmService.shared.objectWillChange.send()
-            // store metadata for notification
-            // We can't call a private save method here; instead schedule an AlarmKit countdown with metadata
-            let seconds = next.timeIntervalSinceNow
-            if seconds > 1 {
-                _ = await AlarmService.shared.requestAuthorization()
-                do {
-                    let _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("Restriction Starts"), carID: car.id, spotID: spot.id)
-                } catch { }
-            }
+            refreshPendingAlerts()
         }
     }
 
-    private func cancelAlert(for car: Car) {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { reqs in
-            let ids = reqs.map { $0.identifier }.filter { $0.hasPrefix("nextRestriction.car.\(car.id.uuidString).spot.") }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+    private func endParking(for carID: UUID) {
+        guard let car = cars.first(where: { $0.id == carID }) else { return }
+        Task {
+            await sessions.end(car, at: spot)
+            refreshPendingAlerts()
+        }
+    }
+
+    private func scheduleMoveAlert(for car: Car) {
+        Task {
+            await sessions.scheduleMoveAlert(for: car, at: spot)
+            refreshPendingAlerts()
+        }
+    }
+
+    private func cancelMoveAlert(for car: Car) {
+        Task {
+            await sessions.cancelMoveAlert(forCarID: car.id)
+            refreshPendingAlerts()
         }
     }
 
     private func refreshPendingAlerts() {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { reqs in
-            var map: [String: Date] = [:]
-            let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-            for s in active {
-                if let car = s.car {
-                    let idPrefix = "nextRestriction.car.\(car.id.uuidString).spot."
-                    if let r = reqs.first(where: { $0.identifier.hasPrefix(idPrefix) }), let trig = r.trigger as? UNCalendarNotificationTrigger, let date = trig.nextTriggerDate() {
-                        map[car.id.uuidString] = date
-                    }
-                }
-            }
-            DispatchQueue.main.async { self.pendingAlerts = map }
+        let carIDs = spot.parkSessions.filter { $0.endedAt == nil }.compactMap { $0.car?.id }
+        Task {
+            pendingAlerts = await ParkingSessionService.pendingMoveAlertDates(forCarIDs: carIDs)
         }
     }
 
@@ -1234,12 +1197,10 @@ struct ParkingSpotDetailView: View {
         }
     }
 
-    private func endGenericParking() {
-        do {
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.endedAt == nil && s.spot?.id == spot.id && s.car == nil { s.endedAt = Date() }
-            try context.save()
-        } catch {
+    private func endAllParkingHere() {
+        Task {
+            await sessions.endAll(at: spot)
+            refreshPendingAlerts()
         }
     }
     
@@ -1306,25 +1267,6 @@ struct ParkingSpotDetailView: View {
         return labels.isEmpty ? "None" : labels.joined(separator: ", ")
     }
 
-    private func startParking(for car: Car) {
-        do {
-            // End any active session for this car
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == car.id && s.endedAt == nil { s.endedAt = Date() }
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: car)
-            context.insert(session)
-            try context.save()
-            if autoScheduleOnPark {
-                scheduleNextRestrictionNotification(for: car, at: spot)
-            } else {
-                promptCar = car
-                nextRestrictionForPrompt = spot.nextRestrictionDate()
-                showSchedulePrompt = true
-            }
-        } catch { }
-    }
-
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> String? {
         let geocoder = CLGeocoder()
         do {
@@ -1357,7 +1299,9 @@ struct ParkingSpotDetailView: View {
     private func deleteSpot() {
         // Cancel pending alerts for any cars parked here
         let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-        for s in active { if let car = s.car { cancelAlert(for: car) } }
+        let parkedCarIDs = active.compactMap { $0.car?.id }
+        let service = sessions
+        Task { for id in parkedCarIDs { await service.cancelMoveAlert(forCarID: id) } }
 
         // Cancel the repeating weekly alarms for this spot's restrictions before deleting.
         let restrictionIDs = spot.restrictions.map { $0.id }

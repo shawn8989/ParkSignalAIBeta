@@ -8,7 +8,6 @@ struct SpotsMapView: View {
     @Environment(\.modelContext) private var context
     @Query private var spots: [ParkingSpot]
     @Query private var cars: [Car]
-    @Query private var sessions: [ParkSession]
     
     @StateObject private var locationManager = LocationManager()
     @State private var cameraPosition: MapCameraPosition = .region(
@@ -291,12 +290,7 @@ struct SpotsMapView: View {
         context.insert(newSpot)
         do { try context.save() } catch { }
 
-        // End any other active sessions for this car
-        let now = Date()
-        for s in sessions where s.car?.id == car.id && s.endedAt == nil { s.endedAt = now }
-        let session = ParkSession(spot: newSpot, startedAt: now, endedAt: nil, car: car)
-        context.insert(session)
-        do { try context.save() } catch { }
+        Task { await ParkingSessionService(context: context).park(car, at: newSpot) }
         UserDefaults.standard.set(car.id.uuidString, forKey: "CarList.LastUsedCarID")
         alertMessage = "Parked \(car.nickname) at \(newSpot.location)."
         showAlert = true
