@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import CryptoKit
 
 // MARK: - RestrictionType Enum
 
@@ -150,42 +149,6 @@ final class ParkingSpot {
             return parkSessions.contains { $0.car?.id == car.id && $0.endedAt == nil }
         } else {
             return parkSessions.contains { $0.endedAt == nil }
-        }
-    }
-
-    @discardableResult
-    func startParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession {
-        // End any existing active session for this car (or any if car is nil)
-        if let car {
-            if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
-                parkSessions[idx].endedAt = now
-            }
-        } else if let idx = parkSessions.firstIndex(where: { $0.endedAt == nil }) {
-            parkSessions[idx].endedAt = now
-        }
-        let session = ParkSession(spot: self, startedAt: now, endedAt: nil, car: car)
-        parkSessions.append(session)
-        car?.sessions.append(session)
-        return session
-    }
-
-    func endCurrentParking(for car: Car? = nil, at date: Date = Date.now) {
-        if let car {
-            if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
-                parkSessions[idx].endedAt = date
-            }
-        } else if let idx = parkSessions.firstIndex(where: { $0.endedAt == nil }) {
-            parkSessions[idx].endedAt = date
-        }
-    }
-
-    @discardableResult
-    func toggleParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession? {
-        if isCurrentlyParked(for: car) {
-            endCurrentParking(for: car, at: now)
-            return nil
-        } else {
-            return startParking(for: car, now: now)
         }
     }
 }
@@ -430,8 +393,8 @@ final class SignScan {
 struct MockData {
     static var users: [User] {
         [
-            User(username: "alice", email: "alice@mail.com", passwordHash: "password".sha256),
-            User(username: "bob", email: "bob@mail.com", passwordHash: "password123".sha256)
+            User(username: "alice", email: "alice@mail.com", passwordHash: ""),
+            User(username: "bob", email: "bob@mail.com", passwordHash: "")
         ]
     }
     
@@ -491,13 +454,4 @@ struct MockData {
     }
 }
 #endif
-
-// MARK: - Simple SHA256 Hash
-
-extension String {
-    var sha256: String {
-        let digest = SHA256.hash(data: Data(self.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-}
 
