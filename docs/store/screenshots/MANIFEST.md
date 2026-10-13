@@ -9,6 +9,7 @@ upload set is incomplete and has not been approved for submission.
 | --- | --- | --- |
 | `release/iphone69-dashboard.png` | Dashboard with two manually saved sample spots and an unresolved draft scan | Native capture, default text/light appearance; gray review status is intentional |
 | `release/iphone69-spot-before-review.png` | Saved spot before confirming scan rules | Native capture; no interpreted rules or scheduled reminders yet; predates the final layout refinements |
+| `release/iphone69-scan-review.png` | Current Release photo OCR review: weekdays, 09:00–18:00 and 120-minute limit | Native capture before mandatory confirmation; Save Rules disabled; confirmation/save still unverified |
 | `qa/iphone69-dashboard-axxxl-dark-before.png` | Largest accessibility text, dark appearance | Regression evidence of the map legend overlapping the status banner; never upload |
 | `qa/iphone69-dashboard-axxxl-dark.png` | Same setting after the layout correction | Visual QA evidence; never use as a substitute for the full accessibility pass |
 

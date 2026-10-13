@@ -135,3 +135,22 @@ Physical camera quality, AlarmKit delivery and real CloudKit transfer have not b
 certified by simulator/unit tests. TestFlight should include real signs, offline and
 denied permissions, overnight limits, cancellations and multiple devices. No date
 is promised until these checks pass. Later paid Smart Scan remains out of v1.
+
+## Distribution preparation follow-up — 2026-10-12
+
+The owner explicitly authorized automatic provisioning after the first attempt was
+rejected by automatic approval review. Xcode exported version 1.0/build 2 to a local
+IPA using a matching App Store profile (team EU6247328G, debugging disabled, no
+device-limited list). Export requested the Production CloudKit environment. The
+archive/package remain outside Git, and no App Store upload has occurred. Build 2
+is provisional until existing App Store Connect builds are checked.
+
+The current Release photo-picker/OCR/review path displayed Monday–Friday,
+09:00–18:00 and a separate 120-minute maximum stay from the labeled sample sign.
+Save Rules remained disabled before confirmation. This does not yet prove the
+completed save or alarm delivery. Simulator resizing briefly restored control;
+intermittent window/time-out errors returned during the confirmation scroll.
+
+Production schema, two-device sync, delivery/cancellation, full accessibility and
+the final screenshot set remain release gates. The owner's phone was not used
+for this follow-up.
