@@ -53,15 +53,11 @@ struct ParkSignalApp: App {
         #endif
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-InitializeCloudKitSchema") {
-            if useCloudKit {
-                do {
-                    try CloudSchemaPreparation.initializeDevelopmentSchema()
-                    print("ParkSignal development schema initialization completed. Verify every field in CloudKit Console before deployment.")
-                } catch {
-                    AppIssueStore.shared.message = "Development schema initialization failed: \(error.localizedDescription)"
-                }
-            } else {
-                AppIssueStore.shared.message = "Schema preparation requires a signed, iCloud-enabled device or simulator."
+            do {
+                try CloudSchemaPreparation.initializeDevelopmentSchema(cloudKitEnabled: useCloudKit)
+                print("ParkSignal development schema initialization completed. Verify every field in CloudKit Console before deployment.")
+            } catch {
+                AppIssueStore.shared.message = "Development schema initialization failed: \(error.localizedDescription)"
             }
         }
         #endif

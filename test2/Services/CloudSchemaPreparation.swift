@@ -14,7 +14,15 @@ enum ParkSignalModelSchema {
 /// Explicit developer action only. Never opens the user's persisted store.
 @MainActor
 enum CloudSchemaPreparation {
-    static func initializeDevelopmentSchema() throws {
+    enum PreparationError: LocalizedError {
+        case cloudKitUnavailable
+        var errorDescription: String? {
+            "Schema preparation requires a signed, iCloud-enabled device or simulator."
+        }
+    }
+
+    static func initializeDevelopmentSchema(cloudKitEnabled: Bool) throws {
+        guard cloudKitEnabled else { throw PreparationError.cloudKitUnavailable }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ParkSignal-schema-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
