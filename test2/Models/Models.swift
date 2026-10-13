@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import CryptoKit
 
 // MARK: - RestrictionType Enum
 
@@ -8,6 +7,7 @@ enum RestrictionType: String, Codable, Hashable, CaseIterable {
     case noParking = "No Parking"
     case streetCleaning = "Street Cleaning"
     case metered = "Metered"
+    case timeLimited = "Time Limit"
     case permit = "Permit"
     case other = "Other"
     var displayName: String { rawValue }
@@ -24,7 +24,11 @@ final class User {
     var registeredAt: Date = Date.now
 
     @Relationship(deleteRule: .cascade, inverse: \Car.owner)
-    var cars: [Car] = []
+    var cars: [Car]? = []
+    var carsList: [Car] {
+        get { cars ?? [] }
+        set { cars = newValue }
+    }
 
     init(id: UUID = UUID(), username: String, email: String, passwordHash: String, registeredAt: Date = Date.now) {
         self.id = id
@@ -48,7 +52,11 @@ final class Car {
     @Relationship var owner: User?
 
     @Relationship(deleteRule: .cascade, inverse: \ParkSession.car)
-    var sessions: [ParkSession] = []
+    var sessions: [ParkSession]? = []
+    var sessionsList: [ParkSession] {
+        get { sessions ?? [] }
+        set { sessions = newValue }
+    }
 
     init(
         id: UUID = UUID(),
@@ -65,7 +73,7 @@ final class Car {
         self.colorHex = colorHex
         self.iconName = iconName
         self.owner = owner
-        self.sessions = sessions
+        self.sessionsList = sessions
     }
 }
 
@@ -77,15 +85,28 @@ final class ParkingSpot {
     var location: String = ""
     var latitude: Double = 0
     var longitude: Double = 0
+    var timeZoneIdentifier: String = ""
     var streetSide: String = "" // "left" or "right" or other
     @Relationship(deleteRule: .cascade, inverse: \Restriction.spot)
-    var restrictions: [Restriction] = []
+    var restrictions: [Restriction]? = []
+    var restrictionsList: [Restriction] {
+        get { restrictions ?? [] }
+        set { restrictions = newValue }
+    }
 
     @Relationship(deleteRule: .cascade, inverse: \SignScan.spot)
-    var signScans: [SignScan] = []
+    var signScans: [SignScan]? = []
+    var signScansList: [SignScan] {
+        get { signScans ?? [] }
+        set { signScans = newValue }
+    }
 
     @Relationship(deleteRule: .cascade, inverse: \ParkSession.spot)
-    var parkSessions: [ParkSession] = []
+    var parkSessions: [ParkSession]? = []
+    var parkSessionsList: [ParkSession] {
+        get { parkSessions ?? [] }
+        set { parkSessions = newValue }
+    }
 
     var lastScanText: String?
     var lastScanPhotoFilename: String?
@@ -112,8 +133,9 @@ final class ParkingSpot {
         self.location = location
         self.latitude = latitude
         self.longitude = longitude
+        self.timeZoneIdentifier = TimeZone.current.identifier
         self.streetSide = streetSide
-        self.restrictions = restrictions
+        self.restrictionsList = restrictions
         self.lastScanText = lastScanText
         self.lastScanPhotoFilename = lastScanPhotoFilename
         self.lastScanAt = lastScanAt
@@ -122,9 +144,9 @@ final class ParkingSpot {
 
     // Convenience helpers for managing scans and photos
     func attach(scan: SignScan) {
-        if !self.signScans.contains(where: { $0.id == scan.id }) {
+        if !self.signScansList.contains(where: { $0.id == scan.id }) {
             scan.spot = self
-            self.signScans.append(scan)
+            self.signScansList.append(scan)
         } else {
             scan.spot = self
         }
@@ -132,7 +154,8 @@ final class ParkingSpot {
     }
 
     func updateLastScan(from scan: SignScan) {
-        self.lastScanText = scan.aiAnalysisText ?? scan.localAnalysisText ?? scan.ocrText
+        let merged = scan.mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.lastScanText = !merged.isEmpty ? merged : scan.ocrText
         self.lastScanPhotoFilename = scan.photoFilenames.first ?? scan.photoFilename ?? scan.additionalPhotoFilenames.first
         self.lastScanAt = scan.analyzedAt ?? scan.createdAt
     }
@@ -147,45 +170,9 @@ final class ParkingSpot {
 
     func isCurrentlyParked(for car: Car?) -> Bool {
         if let car {
-            return parkSessions.contains { $0.car?.id == car.id && $0.endedAt == nil }
+            return parkSessionsList.contains { $0.car?.id == car.id && $0.endedAt == nil }
         } else {
-            return parkSessions.contains { $0.endedAt == nil }
-        }
-    }
-
-    @discardableResult
-    func startParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession {
-        // End any existing active session for this car (or any if car is nil)
-        if let car {
-            if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
-                parkSessions[idx].endedAt = now
-            }
-        } else if let idx = parkSessions.firstIndex(where: { $0.endedAt == nil }) {
-            parkSessions[idx].endedAt = now
-        }
-        let session = ParkSession(spot: self, startedAt: now, endedAt: nil, car: car)
-        parkSessions.append(session)
-        car?.sessions.append(session)
-        return session
-    }
-
-    func endCurrentParking(for car: Car? = nil, at date: Date = Date.now) {
-        if let car {
-            if let idx = parkSessions.firstIndex(where: { $0.car?.id == car.id && $0.endedAt == nil }) {
-                parkSessions[idx].endedAt = date
-            }
-        } else if let idx = parkSessions.firstIndex(where: { $0.endedAt == nil }) {
-            parkSessions[idx].endedAt = date
-        }
-    }
-
-    @discardableResult
-    func toggleParking(for car: Car? = nil, now: Date = Date.now) -> ParkSession? {
-        if isCurrentlyParked(for: car) {
-            endCurrentParking(for: car, at: now)
-            return nil
-        } else {
-            return startParking(for: car, now: now)
+            return parkSessionsList.contains { $0.endedAt == nil }
         }
     }
 }
@@ -210,6 +197,9 @@ final class Restriction {
             daysMask = clamped.reduce(0) { $0 | (1 << $1) }
         }
     }
+    var needsReview: Bool = true
+    var reviewReasons: [String] = []
+    var durationMinutes: Int?
     var sourceUser: UUID = UUID() // the User.id that added this restriction
     var signPhotoFilename: String? // placeholder for image storage
     var ocrText: String? // AI-detected text from sign
@@ -227,7 +217,10 @@ final class Restriction {
         signPhotoFilename: String? = nil,
         ocrText: String? = nil,
         spot: ParkingSpot? = nil,
-        scan: SignScan? = nil
+        scan: SignScan? = nil,
+        needsReview: Bool = false,
+        reviewReasons: [String] = [],
+        durationMinutes: Int? = nil
     ) {
         self.id = id
         self.type = type
@@ -240,11 +233,15 @@ final class Restriction {
         self.ocrText = ocrText
         self.spot = spot
         self.scan = scan
+        self.needsReview = needsReview
+        self.reviewReasons = reviewReasons
+        self.durationMinutes = durationMinutes
     }
     
     var timeDescription: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        if let zone = spot.flatMap({ TimeZone(identifier: $0.timeZoneIdentifier) }) { formatter.timeZone = zone }
         let start = formatter.string(from: startTime)
         let end = formatter.string(from: endTime)
         return "\(start) - \(end)"
@@ -303,6 +300,7 @@ final class SignScan {
     var address: String?
     var status: String = "incomplete"
     var signalState: String? = nil
+    var needsReview: Bool = true
 
     // Segment metadata (curb segment assignment)
     var segmentCenterLat: Double?
@@ -311,7 +309,11 @@ final class SignScan {
     var segmentStreetSide: String?
     var segmentDirection: Double? // degrees 0...360
 
-    @Relationship(deleteRule: .nullify, inverse: \Restriction.scan) var restrictions: [Restriction] = []
+    @Relationship(deleteRule: .nullify, inverse: \Restriction.scan) var restrictions: [Restriction]? = []
+    var restrictionsList: [Restriction] {
+        get { restrictions ?? [] }
+        set { restrictions = newValue }
+    }
 
     // Analysis results
     var aiAnalysisText: String?
@@ -377,7 +379,7 @@ final class SignScan {
         self.aiAnalysisText = aiAnalysisText
         self.localAnalysisText = localAnalysisText
         self.analyzedAt = analyzedAt
-        self.restrictions = restrictions
+        self.restrictionsList = restrictions
         self.sourceUser = sourceUser
         self.spot = spot
     }
@@ -430,8 +432,8 @@ final class SignScan {
 struct MockData {
     static var users: [User] {
         [
-            User(username: "alice", email: "alice@mail.com", passwordHash: "password".sha256),
-            User(username: "bob", email: "bob@mail.com", passwordHash: "password123".sha256)
+            User(username: "alice", email: "alice@mail.com", passwordHash: ""),
+            User(username: "bob", email: "bob@mail.com", passwordHash: "")
         ]
     }
     
@@ -492,12 +494,23 @@ struct MockData {
 }
 #endif
 
-// MARK: - Simple SHA256 Hash
+// MARK: - Synced photo storage
 
-extension String {
-    var sha256: String {
-        let digest = SHA256.hash(data: Data(self.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
+/// Image bytes for a saved photo, keyed by its on-disk filename. This is what makes
+/// photos sync: SwiftData ships the `.externalStorage` blob through CloudKit as an
+/// asset, so a scan's sign photo is available on the user's other devices (the local
+/// file is just a fast cache). CloudKit forbids unique constraints, so uniqueness of
+/// `filename` is enforced in code (ImageStore upserts).
+@Model
+final class PhotoBlob {
+    var filename: String = ""
+    @Attribute(.externalStorage) var data: Data?
+    var createdAt: Date = Date.now
+
+    init(filename: String, data: Data?) {
+        self.filename = filename
+        self.data = data
+        self.createdAt = Date.now
     }
 }
 

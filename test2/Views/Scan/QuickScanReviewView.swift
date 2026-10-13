@@ -1,7 +1,9 @@
 import SwiftUI
 import UIKit
+import SwiftData
 
 struct QuickScanReviewView: View {
+    @Environment(\.modelContext) private var context
     // Initial seed image/OCR (optional). The view manages a multi‑photo session.
     let image: UIImage
     var ocrPreview: String?
@@ -16,6 +18,7 @@ struct QuickScanReviewView: View {
 
     @State private var showToast = false
     @State private var working = false
+    @State private var saveError: String?
     @State private var showingCamera = false
 
     private let ocrService = VisionOCRService()
@@ -23,11 +26,13 @@ struct QuickScanReviewView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+                if let saveError { Text(saveError).foregroundStyle(.red).padding() }
                 ScrollView {
                     VStack(spacing: 12) {
                         if let last = images.last {
                             Image(uiImage: last)
                                 .resizable()
+                                .accessibilityLabel("Selected sign photo")
                                 .scaledToFit()
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .padding(.horizontal)
@@ -72,24 +77,27 @@ struct QuickScanReviewView: View {
                     }
                 }
 
-                HStack(spacing: 12) {
-                    Button(role: .destructive) { onDelete() } label: {
-                        Label("Delete", systemImage: "trash")
+                VStack(spacing: 10) {
+                    Menu {
+                        Button("Retake Photo", systemImage: "arrow.uturn.left", action: onRetake)
+                        Button("Add Another Photo", systemImage: "plus.circle") { showingCamera = true }
+                        Button("Discard Photos", systemImage: "trash", role: .destructive, action: onDelete)
+                    } label: {
+                        Label("Photo Options", systemImage: "ellipsis.circle")
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    Button { onRetake() } label: {
-                        Label("Retake Photo", systemImage: "arrow.uturn.left")
-                    }
-                    Button { showingCamera = true } label: {
-                        Label("Add Another Photo", systemImage: "plus.circle")
-                    }
-                    Spacer()
+                    .buttonStyle(.bordered)
                     Button {
                         Task { await submit() }
                     } label: {
-                        Label("Submit Scan", systemImage: "paperplane")
+                        Label("Review Rules", systemImage: "checklist")
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(working)
+                    .disabled(working || mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("No sign text was found. Retake a clearer photo or enter a rule manually from the spot.").font(.footnote)
+                    }
                 }
                 .padding()
             }
@@ -145,9 +153,8 @@ struct QuickScanReviewView: View {
         defer { working = false }
         var filenames: [String] = []
         for img in images {
-            if let name = try? ImageStore.saveJPEG(img) {
-                filenames.append(name)
-            }
+            do { filenames.append(try ImageStore.saveJPEG(img, context: context)) }
+            catch { saveError = "Couldn't save the photos: \(error.localizedDescription)"; return }
         }
         withAnimation { showToast = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

@@ -26,7 +26,7 @@ struct ScansView: View {
                             editingScan = scan
                         } label: {
                             HStack(alignment: .top, spacing: 12) {
-                                if let name = scan.photoFilename, let img = ImageStore.loadImage(named: name) {
+                                if let name = scan.photoFilename, let img = ImageStore.loadImage(named: name, context: context) {
                                     Image(uiImage: img).resizable().scaledToFill().frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 6))
                                 } else {
                                     Image(systemName: "photo").resizable().scaledToFit().frame(width: 44, height: 44).foregroundStyle(.secondary)
@@ -50,8 +50,8 @@ struct ScansView: View {
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
-                                context.delete(scan)
-                                try? context.save()
+                                do { try ParkingDataDeletion(context: context).delete(scans: [scan]) }
+                                catch { AppIssueStore.shared.message = error.localizedDescription }
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -96,8 +96,8 @@ struct ScansView: View {
 
     private func deleteAllFiltered() {
         let targets = filteredScans
-        for s in targets { context.delete(s) }
-        try? context.save()
+        do { try ParkingDataDeletion(context: context).delete(scans: targets) }
+        catch { AppIssueStore.shared.message = error.localizedDescription }
     }
 }
 

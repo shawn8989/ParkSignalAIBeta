@@ -48,6 +48,7 @@ struct AlarmListView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.borderless)
+                        .frame(minWidth: 44, minHeight: 44)
                         .accessibilityLabel("Cancel alarm")
                     }
                 }
@@ -73,6 +74,7 @@ struct AlarmListView: View {
             ToolbarItem(placement: .destructiveAction) {
                 Button("Cancel All", role: .destructive) {
                     Task {
+                        ReminderCoordinator.shared.suppressAll()
                         await alarmService.cancelAll()
                         await refresh()
                     }
@@ -102,6 +104,7 @@ struct AlarmListView: View {
     }
 
     private func cancel(_ alarm: AlarmService.SimpleAlarm, refreshAfter: Bool = true) async {
+        ReminderCoordinator.shared.suppress(alarm)
         switch alarm.source {
         case .alarmKit:
             await alarmService.cancel(id: alarm.id)

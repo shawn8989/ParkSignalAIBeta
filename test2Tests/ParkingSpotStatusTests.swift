@@ -22,7 +22,7 @@ struct ParkingSpotStatusTests {
         let end = cal.date(byAdding: .hour, value: 2, to: start) ?? now
         let r = Restriction(type: .streetCleaning, startTime: start, endTime: end, daysOfWeek: [2], sourceUser: UUID(), spot: spot)
         context.insert(r)
-        spot.restrictions.append(r)
+        spot.restrictionsList.append(r)
         try context.save()
 
         let next = spot.nextRestrictionDate(from: now)
@@ -50,7 +50,7 @@ struct ParkingSpotStatusTests {
         let end = cal.date(byAdding: .hour, value: 2, to: start)!
         let r = Restriction(type: .noParking, startTime: start, endTime: end, daysOfWeek: [weekday0_6], sourceUser: UUID(), spot: spot)
         context.insert(r)
-        spot.restrictions.append(r)
+        spot.restrictionsList.append(r)
         try context.save()
 
         let active = spot.isRestrictedNow(at: ref)

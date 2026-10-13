@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import SwiftData
 
 /// AlertsHubView
 /// A single place to manage alert permissions, quick tests, and navigation to alarm/notification lists.
@@ -7,6 +8,7 @@ import UserNotifications
 /// - Lets the user request permissions, adjust lead time, and trigger test alerts.
 /// - Keeps navigation links to the detailed Alarms and Notifications screens.
 struct AlertsHubView: View {
+    @Environment(\.modelContext) private var context
     // Lead time for restriction reminders (shared with NotificationManager via @AppStorage)
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
@@ -26,10 +28,14 @@ struct AlertsHubView: View {
                             .foregroundStyle(statusColor(notificationStatus))
                     }
                     HStack {
-                        Label("AlarmKit", systemImage: "alarm")
+                        Label("System Alarms", systemImage: "alarm")
                         Spacer()
+                        if #available(iOS 26.0, *) {
                         Text(alarmAuthorized ? "Authorized" : "Not Authorized")
                             .foregroundStyle(alarmAuthorized ? .green : .secondary)
+                        } else {
+                            Text("Requires iOS 26").foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -51,6 +57,18 @@ struct AlertsHubView: View {
                         Label("Request Notification Permission", systemImage: "bell.badge")
                     }
                     .disabled(isRequesting)
+
+                    if #available(iOS 26.0, *) {
+                        Button {
+                            Task { await requestAlarmPermission() }
+                        } label: {
+                            Label("Enable System Alarms", systemImage: "alarm")
+                        }
+                        .disabled(isRequesting || alarmAuthorized)
+                        Text("System alarms require separate permission. Parking reminders must also be enabled in Settings on this device.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
                     #if DEBUG
                     Button {
@@ -130,8 +148,7 @@ struct AlertsHubView: View {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         notificationStatus = settings.authorizationStatus
-        // Avoid prompting the user when refreshing status. AlarmKit currently lacks a non-interactive status API in our wrapper,
-        // so we do not call requestAuthorization() here. Instead, we use a cached value to avoid prompting.
+        // Read the current authorization state without prompting.
         alarmAuthorized = AlarmService.shared.isAuthorizedCached()
     }
 
@@ -139,6 +156,18 @@ struct AlertsHubView: View {
         isRequesting = true
         defer { isRequesting = false }
         _ = await NotificationManager.shared.requestAuthorizationIfNeeded()
+        await refreshStatuses()
+    }
+
+    private func requestAlarmPermission() async {
+        isRequesting = true
+        defer { isRequesting = false }
+        let allowed = await AlarmService.shared.requestAuthorization()
+        if !allowed { lastTestError = "System alarms are not allowed. Check ParkSignal’s alarm permission in iPhone Settings, or use notification reminders." }
+        else {
+            lastTestError = nil
+            await ReminderCoordinator.shared.reconcile(context: context)
+        }
         await refreshStatuses()
     }
 }

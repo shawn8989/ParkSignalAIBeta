@@ -3,9 +3,14 @@
 // - Developer diagnostics and the beta live scanner are DEBUG-only.
 
 import SwiftUI
+import SwiftData
 import UserNotifications
 
 struct SettingsView: View {
+    @Environment(\.modelContext) private var context
+    @ObservedObject private var storage = StorageStatus.shared
+    @ObservedObject private var reminders = ReminderCoordinator.shared
+    @AppStorage("parkingRemindersEnabledOnDevice") private var remindersEnabled = false
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
     @AppStorage("showScansOnDashboard") private var showScansOnDashboard: Bool = false
     @AppStorage("autoCenterOnLaunch") private var autoCenterOnLaunch: Bool = true
@@ -25,7 +30,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Storage & Sync") {
+                    Text(storage.summary)
+                    Text(storage.detail).font(.footnote)
+                    Button("Check iCloud Status") { Task { await storage.refreshAccount() } }
+                }
                 Section(header: Text("Notifications")) {
+                    Toggle("Parking reminders on this device", isOn: $remindersEnabled)
+                        .onChange(of: remindersEnabled) { _, enabled in
+                            Task {
+                                if enabled { await reminders.enable(context: context) }
+                                else { await reminders.reconcile(context: context) }
+                            }
+                        }
+                    Text("Reminders are scheduled only on devices where you enable them. They do not sync through iCloud. Open the app at least every two weeks to extend the schedule; at most 48 upcoming reminders are kept.").font(.footnote)
+                    if remindersEnabled {
+                        Button("Restore Cancelled Parking Reminders") { Task { await reminders.resumeCancelled(context: context) } }
+                    }
+                    if let message = reminders.statusMessage { Text(message).font(.footnote) }
                     Stepper(value: $leadMinutes, in: 0...120, step: 5) {
                         Text("Alert lead time: \(leadMinutes) minute\(leadMinutes == 1 ? "" : "s")")
                     }
@@ -41,7 +63,9 @@ struct SettingsView: View {
                 Section(header: Text("Map Overlays")) {
                     Toggle("Show Availability Overlays", isOn: $mapShowAvailabilityOverlay)
                     Toggle("Show Legend", isOn: $mapShowLegend)
-                    Toggle("Show City Zone Overlays", isOn: $mapShowCityZoneOverlay)
+                    #if DEBUG
+                    Toggle("Show Sample City Zones (Debug)", isOn: $mapShowCityZoneOverlay)
+                    #endif
                 }
 
                 Section(header: Text("Alerts")) {
@@ -105,9 +129,7 @@ struct SettingsView: View {
     }
 }
 
-// Legal/support links shown in Settings → About. Update the host once the pages
-// in docs/legal/ are published (e.g. GitHub Pages from /docs). See
-// docs/store/SUBMISSION_CHECKLIST.md.
+// Published from the gh-pages branch; source copies live in docs/legal/.
 private enum LegalLinks {
     static let privacy = URL(string: "https://shawn8989.github.io/ParkSignalAIBeta/legal/privacy.html")!
     static let support = URL(string: "https://shawn8989.github.io/ParkSignalAIBeta/legal/support.html")!

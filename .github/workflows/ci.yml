@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,6 +31,9 @@ jobs:
           echo "Using simulator: $UDID"
 
       - name: Build & test (unit tests)
+        env:
+          # xcodebuild forwards TEST_RUNNER_* (prefix stripped) to the test process.
+          TEST_RUNNER_CORPUS_REPORT_PATH: ${{ runner.temp }}/corpus-report.txt
         run: |
           set -o pipefail
           xcodebuild test \
@@ -38,11 +42,49 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -configuration Debug \
             -only-testing:test2Tests \
-            CODE_SIGNING_ALLOWED=NO \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES \
             -resultBundlePath TestResults.xcresult
         # Note: the UI-test target (test2UITests) is Xcode boilerplate and is
         # excluded here — it hangs on GitHub runners (instruments lockdown
         # timeout). Unit tests cover the real logic.
+
+      - name: Release build
+        run: |
+          xcodebuild build -quiet \
+            -project test2.xcodeproj -scheme test2 \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
+
+      - name: Physical-device Release build (unsigned)
+        run: |
+          xcodebuild build -quiet \
+            -project test2.xcodeproj -scheme test2 \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
+
+      - name: Parser corpus report
+        if: always()
+        run: |
+          REPORT="${{ runner.temp }}/corpus-report.txt"
+          if [ -f "$REPORT" ]; then
+            cat "$REPORT"
+            {
+              echo "### Parser corpus"
+              grep 'CORPUS|SUMMARY' "$REPORT" | cut -d'|' -f3
+              echo
+              echo '<details><summary>Per-sign results</summary>'
+              echo
+              echo '```'
+              cat "$REPORT"
+              echo '```'
+              echo '</details>'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No corpus report was written."
+          fi
 
       - name: Upload test results (on failure)
         if: failure()

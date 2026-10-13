@@ -50,7 +50,7 @@ struct SpotEditView: View {
         } else {
             spot.streetSide = DrivingSide.storedSide(from: orientation)
         }
-        do { try context.save() } catch { }
+        guard context.saveOrReport() else { return }
         dismiss()
     }
 }

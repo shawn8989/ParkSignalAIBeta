@@ -1,0 +1,419 @@
+import Foundation
+import SwiftData
+@testable import ParkSignal_AI
+
+// Frozen pre-v1 schema. Do not update when current models change.
+enum LegacyStoreSchema {
+// MARK: - User
+
+@Model
+final class User {
+    var id: UUID = UUID()
+    var username: String = ""
+    var email: String = ""
+    var passwordHash: String = ""
+    var registeredAt: Date = Date.now
+
+    @Relationship(deleteRule: .cascade, inverse: \Car.owner)
+    var cars: [Car] = []
+
+    init(id: UUID = UUID(), username: String, email: String, passwordHash: String, registeredAt: Date = Date.now) {
+        self.id = id
+        self.username = username
+        self.email = email
+        self.passwordHash = passwordHash
+        self.registeredAt = registeredAt
+    }
+}
+
+// MARK: - Car
+
+@Model
+final class Car {
+    var id: UUID = UUID()
+    var nickname: String = ""
+    var licensePlate: String?
+    var colorHex: String?
+    var iconName: String = "car.fill"
+
+    @Relationship var owner: User?
+
+    @Relationship(deleteRule: .cascade, inverse: \ParkSession.car)
+    var sessions: [ParkSession] = []
+
+    init(
+        id: UUID = UUID(),
+        nickname: String,
+        licensePlate: String? = nil,
+        colorHex: String? = nil,
+        iconName: String = "car.fill",
+        owner: User? = nil,
+        sessions: [ParkSession] = []
+    ) {
+        self.id = id
+        self.nickname = nickname
+        self.licensePlate = licensePlate
+        self.colorHex = colorHex
+        self.iconName = iconName
+        self.owner = owner
+        self.sessions = sessions
+    }
+}
+
+// MARK: - ParkingSpot
+
+@Model
+final class ParkingSpot {
+    var id: UUID = UUID()
+    var location: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var streetSide: String = "" // "left" or "right" or other
+    @Relationship(deleteRule: .cascade, inverse: \Restriction.spot)
+    var restrictions: [Restriction] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \SignScan.spot)
+    var signScans: [SignScan] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \ParkSession.spot)
+    var parkSessions: [ParkSession] = []
+
+    var lastScanText: String?
+    var lastScanPhotoFilename: String?
+    var lastScanAt: Date?
+
+    var streetPhotoFilenames: [String] = []
+    var notes: String? = nil
+
+    @Transient var alarmIDs: [UUID] = [UUID]()
+
+    init(
+        id: UUID = UUID(),
+        location: String,
+        latitude: Double,
+        longitude: Double,
+        streetSide: String,
+        restrictions: [Restriction] = [],
+        lastScanText: String? = nil,
+        lastScanPhotoFilename: String? = nil,
+        lastScanAt: Date? = nil,
+        alarmIDs: [UUID] = []
+    ) {
+        self.id = id
+        self.location = location
+        self.latitude = latitude
+        self.longitude = longitude
+        self.streetSide = streetSide
+        self.restrictions = restrictions
+        self.lastScanText = lastScanText
+        self.lastScanPhotoFilename = lastScanPhotoFilename
+        self.lastScanAt = lastScanAt
+        self.alarmIDs = alarmIDs
+    }
+
+    // Convenience helpers for managing scans and photos
+    func attach(scan: SignScan) {
+        if !self.signScans.contains(where: { $0.id == scan.id }) {
+            scan.spot = self
+            self.signScans.append(scan)
+        } else {
+            scan.spot = self
+        }
+        self.updateLastScan(from: scan)
+    }
+
+    func updateLastScan(from scan: SignScan) {
+        self.lastScanText = scan.aiAnalysisText ?? scan.localAnalysisText ?? scan.ocrText
+        self.lastScanPhotoFilename = scan.photoFilenames.first ?? scan.photoFilename ?? scan.additionalPhotoFilenames.first
+        self.lastScanAt = scan.analyzedAt ?? scan.createdAt
+    }
+
+    func addStreetPhoto(filename: String) {
+        if !self.streetPhotoFilenames.contains(filename) {
+            self.streetPhotoFilenames.append(filename)
+        }
+    }
+
+    var isCurrentlyParked: Bool { isCurrentlyParked(for: nil) }
+
+    func isCurrentlyParked(for car: Car?) -> Bool {
+        if let car {
+            return parkSessions.contains { $0.car?.id == car.id && $0.endedAt == nil }
+        } else {
+            return parkSessions.contains { $0.endedAt == nil }
+        }
+    }
+}
+
+// MARK: - Restriction
+
+@Model
+final class Restriction {
+    var id: UUID = UUID()
+    var type: RestrictionType = RestrictionType.other
+    var startTime: Date = Date.now
+    var endTime: Date = Date.now
+    var daysMask: Int = 0 // bitmask for days: Sunday bit0 ... Saturday bit6
+
+    // Computed accessor for days of week as indices (0 = Sun ... 6 = Sat)
+    var daysOfWeek: [Int] {
+        get {
+            (0...6).filter { (daysMask & (1 << $0)) != 0 }
+        }
+        set {
+            let clamped = newValue.filter { (0...6).contains($0) }
+            daysMask = clamped.reduce(0) { $0 | (1 << $1) }
+        }
+    }
+    var sourceUser: UUID = UUID() // the User.id that added this restriction
+    var signPhotoFilename: String? // placeholder for image storage
+    var ocrText: String? // AI-detected text from sign
+
+    @Relationship var spot: ParkingSpot?
+    @Relationship var scan: SignScan?
+
+    init(
+        id: UUID = UUID(),
+        type: RestrictionType,
+        startTime: Date,
+        endTime: Date,
+        daysOfWeek: [Int],
+        sourceUser: UUID,
+        signPhotoFilename: String? = nil,
+        ocrText: String? = nil,
+        spot: ParkingSpot? = nil,
+        scan: SignScan? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.startTime = startTime
+        self.endTime = endTime
+        let clamped = daysOfWeek.filter { (0...6).contains($0) }
+        self.daysMask = clamped.reduce(0) { $0 | (1 << $1) }
+        self.sourceUser = sourceUser
+        self.signPhotoFilename = signPhotoFilename
+        self.ocrText = ocrText
+        self.spot = spot
+        self.scan = scan
+    }
+
+    var timeDescription: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        let start = formatter.string(from: startTime)
+        let end = formatter.string(from: endTime)
+        return "\(start) - \(end)"
+    }
+
+    var daysDescription: String {
+        // Sunday = 0 through Saturday = 6
+        let daySymbols = Calendar.current.shortWeekdaySymbols
+        let validIndices = daysOfWeek
+            .filter { (0...6).contains($0) }
+            .sorted()
+        let days = validIndices.map { daySymbols[$0] }
+        return days.isEmpty ? "None" : days.joined(separator: ", ")
+    }
+}
+
+// MARK: - ParkSession (Parking History)
+@Model
+final class ParkSession {
+    var id: UUID = UUID()
+    @Relationship var spot: ParkingSpot?
+    @Relationship var car: Car?
+    var startedAt: Date = Date.now
+    var endedAt: Date?
+
+    var isActive: Bool { endedAt == nil }
+
+    init(id: UUID = UUID(), spot: ParkingSpot? = nil, startedAt: Date = Date.now, endedAt: Date? = nil, car: Car? = nil) {
+        self.id = id
+        self.spot = spot
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.car = car
+    }
+}
+
+// MARK: - SignScan (Street Sign pins captured from live scans)
+@Model
+final class SignScan {
+    var id: UUID = UUID()
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var ocrText: String = ""
+    var createdAt: Date = Date.now
+    var photoFilename: String?
+    var additionalPhotoFilenames: [String] = []
+    var photoFilenames: [String] = []
+
+    // Detailed location metadata
+    var horizontalAccuracy: Double?
+    var altitude: Double?
+    var heading: Double?
+    var speed: Double?
+    var mergedOCRText: String = ""
+
+    var address: String?
+    var status: String = "incomplete"
+    var signalState: String? = nil
+
+    // Segment metadata (curb segment assignment)
+    var segmentCenterLat: Double?
+    var segmentCenterLon: Double?
+    var segmentRadius: Double?
+    var segmentStreetSide: String?
+    var segmentDirection: Double? // degrees 0...360
+
+    @Relationship(deleteRule: .nullify, inverse: \Restriction.scan) var restrictions: [Restriction] = []
+
+    // Analysis results
+    var aiAnalysisText: String?
+    var localAnalysisText: String?
+    var analyzedAt: Date?
+
+    // Who created the scan
+    var sourceUser: UUID?
+
+    // Optional attachment to a ParkingSpot
+    @Relationship var spot: ParkingSpot?
+
+    init(
+        id: UUID = UUID(),
+        latitude: Double,
+        longitude: Double,
+        ocrText: String,
+        createdAt: Date = Date.now,
+        photoFilename: String? = nil,
+        additionalPhotoFilenames: [String] = [],
+        photoFilenames: [String] = [],
+        mergedOCRText: String = "",
+        horizontalAccuracy: Double? = nil,
+        altitude: Double? = nil,
+        heading: Double? = nil,
+        speed: Double? = nil,
+        address: String? = nil,
+        status: String = "incomplete",
+        signalState: String? = nil,
+        aiAnalysisText: String? = nil,
+        localAnalysisText: String? = nil,
+        analyzedAt: Date? = nil,
+        restrictions: [Restriction] = [],
+        sourceUser: UUID? = nil,
+        spot: ParkingSpot? = nil,
+        segmentCenterLat: Double? = nil,
+        segmentCenterLon: Double? = nil,
+        segmentRadius: Double? = nil,
+        segmentStreetSide: String? = nil,
+        segmentDirection: Double? = nil
+    ) {
+        self.id = id
+        self.latitude = latitude
+        self.longitude = longitude
+        self.ocrText = ocrText
+        self.createdAt = createdAt
+        self.photoFilename = photoFilename
+        self.additionalPhotoFilenames = additionalPhotoFilenames
+        self.photoFilenames = photoFilenames
+        self.horizontalAccuracy = horizontalAccuracy
+        self.altitude = altitude
+        self.heading = heading
+        self.speed = speed
+        self.mergedOCRText = mergedOCRText
+        self.address = address
+        self.status = status
+        self.signalState = signalState
+        self.segmentCenterLat = segmentCenterLat
+        self.segmentCenterLon = segmentCenterLon
+        self.segmentRadius = segmentRadius
+        self.segmentStreetSide = segmentStreetSide
+        self.segmentDirection = segmentDirection
+        self.aiAnalysisText = aiAnalysisText
+        self.localAnalysisText = localAnalysisText
+        self.analyzedAt = analyzedAt
+        self.restrictions = restrictions
+        self.sourceUser = sourceUser
+        self.spot = spot
+    }
+
+    // Update live location details for an existing scan
+    func updateLocation(latitude: Double, longitude: Double, accuracy: Double? = nil, altitude: Double? = nil, heading: Double? = nil, speed: Double? = nil) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.horizontalAccuracy = accuracy
+        self.altitude = altitude
+        self.heading = heading
+        self.speed = speed
+    }
+
+    // Persist results from either AI or local analyzers
+    func applyAnalysis(aiText: String? = nil, localText: String? = nil, at date: Date = Date.now) {
+        if let aiText { self.aiAnalysisText = aiText }
+        if let localText { self.localAnalysisText = localText }
+        self.analyzedAt = date
+    }
+
+    // Add a photo used in analysis (keeps first as primary)
+    func addPhoto(filename: String) {
+        if self.photoFilename == nil {
+            self.photoFilename = filename
+        } else if !self.additionalPhotoFilenames.contains(filename) {
+            self.additionalPhotoFilenames.append(filename)
+        }
+        if !self.photoFilenames.contains(filename) {
+            self.photoFilenames.append(filename)
+        }
+    }
+
+    var allPhotoFilenames: [String] {
+        var arr: [String] = []
+        if let primary = photoFilename { arr.append(primary) }
+        arr.append(contentsOf: additionalPhotoFilenames)
+        if !photoFilenames.isEmpty { // prefer new array ordering
+            return photoFilenames
+        }
+        return arr
+    }
+}
+
+// MARK: - Mock Data
+
+// MARK: - Synced photo storage
+
+/// Image bytes for a saved photo, keyed by its on-disk filename. This is what makes
+/// photos sync: SwiftData ships the `.externalStorage` blob through CloudKit as an
+/// asset, so a scan's sign photo is available on the user's other devices (the local
+/// file is just a fast cache). CloudKit forbids unique constraints, so uniqueness of
+/// `filename` is enforced in code (ImageStore upserts).
+@Model
+final class PhotoBlob {
+    var filename: String = ""
+    @Attribute(.externalStorage) var data: Data?
+    var createdAt: Date = Date.now
+
+    init(filename: String, data: Data?) {
+        self.filename = filename
+        self.data = data
+        self.createdAt = Date.now
+    }
+}
+
+@Model
+final class CurrentParking {
+    var id: UUID = UUID()
+    // Store the spot's id rather than a relationship: CurrentParking has no
+    // reciprocal on ParkingSpot, and CloudKit requires every relationship to
+    // have an inverse. This value is written when the user sets "current
+    // parking"; storing the id keeps it CloudKit-safe.
+    var spotID: UUID?
+    var parkedAt: Date = Date.now
+
+    init(id: UUID = UUID(), spotID: UUID? = nil, parkedAt: Date = Date.now) {
+        self.id = id
+        self.spotID = spotID
+        self.parkedAt = parkedAt
+    }
+}
+
+}

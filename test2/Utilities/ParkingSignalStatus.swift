@@ -4,7 +4,7 @@ import CoreLocation
 
 // Unified color-coded parking signal states used across the app
 enum ParkingSignalStatus: String, CaseIterable, Codable, Equatable {
-    case green   // Safe to park now
+    case green   // No saved blocking rule is active; never a guarantee of legality
     case red     // Illegal to park now (active restriction)
     case yellow  // Allowed now, but a restriction is approaching soon
     case blue    // Permit/ADA required
@@ -37,12 +37,12 @@ extension ParkingSignalStatus {
 
     var label: String {
         switch self {
-        case .green:  return "Safe to Park"
-        case .red:    return "Illegal Now"
+        case .green:  return "No Saved Restriction Active"
+        case .red:    return "Restriction Active"
         case .yellow: return "Restriction Soon"
         case .blue:   return "Permit/ADA Required"
-        case .purple: return "Metered / Paid"
-        case .gray:   return "Unknown"
+        case .purple: return "Payment / Time Limit"
+        case .gray:   return "Check Posted Signs"
         }
     }
 }
@@ -91,14 +91,14 @@ struct ParkingSignalEvaluator {
         let applicable = scans.filter { scan in
             scanAppliesToUserSegment(scan, userLocation: userLocation, userStreetSide: sideString)
         }
-        guard !applicable.isEmpty else { return .gray }
+        guard !applicable.contains(where: \.needsReview), !applicable.isEmpty else { return .gray }
         // Collect restrictions from applicable scans (prefer scan-attached restrictions)
         var restrictions: [Restriction] = []
         for s in applicable {
-            restrictions.append(contentsOf: s.restrictions)
+            restrictions.append(contentsOf: s.restrictionsList)
             // If scan has no restrictions but is attached to a spot, include spot restrictions as fallback
-            if s.restrictions.isEmpty, let sp = s.spot {
-                restrictions.append(contentsOf: sp.restrictions)
+            if s.restrictionsList.isEmpty, let sp = s.spot {
+                restrictions.append(contentsOf: sp.restrictionsList)
             }
         }
         if restrictions.isEmpty { return .gray }
@@ -109,56 +109,15 @@ struct ParkingSignalEvaluator {
     // leadMinutes controls the threshold for "soon" (yellow)
 
     static func status(for spot: ParkingSpot, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
-        let cal = Calendar.current
-
-        // Helper to check active window for a Restriction (handles overnight windows).
-        func isActive(_ r: Restriction) -> Bool {
-            let sh = cal.component(.hour, from: r.startTime)
-            let sm = cal.component(.minute, from: r.startTime)
-            let eh = cal.component(.hour, from: r.endTime)
-            let em = cal.component(.minute, from: r.endTime)
-            return DateTimeUtils.isWindowActive(startHour: sh, startMinute: sm, endHour: eh, endMinute: em,
-                                                days: r.daysOfWeek, now: now, calendar: cal)
-        }
-
-        // RED: any illegal restriction active now
-        if spot.restrictions.contains(where: { r in
-            (r.type == .noParking || r.type == .streetCleaning) && isActive(r)
-        }) {
-            return .red
-        }
-
-        // BLUE: permit/ADA required active now
-        if spot.restrictions.contains(where: { r in
-            r.type == .permit && isActive(r)
-        }) {
-            return .blue
-        }
-
-        // PURPLE: metered/paid active now
-        if spot.restrictions.contains(where: { r in
-            r.type == .metered && isActive(r)
-        }) {
-            return .purple
-        }
-
-        // YELLOW: an illegal restriction (noParking/streetCleaning) starts within leadMinutes
-        if let next = nextIllegalStart(for: spot, from: now) {
-            if next.timeIntervalSince(now) <= TimeInterval(max(0, leadMinutes)) * 60 {
-                return .yellow
-            }
-        }
-
-        // If there are no restrictions at all, treat as unknown rather than green
-        if spot.restrictions.isEmpty { return .gray }
-
-        return .green
+        guard !spot.signScansList.contains(where: \.needsReview) else { return .gray }
+        return status(for: spot.restrictionsList, now: now, leadMinutes: leadMinutes)
     }
 
     static func status(for scan: SignScan, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
+        guard !scan.needsReview else { return .gray }
         // Prefer evaluating from parsed restrictions attached to the scan
-        if scan.status == "complete", !scan.restrictions.isEmpty {
-            return status(for: scan.restrictions, now: now, leadMinutes: leadMinutes)
+        if scan.status == "complete", !scan.restrictionsList.isEmpty {
+            return status(for: scan.restrictionsList, now: now, leadMinutes: leadMinutes)
         }
         // If the scan is attached to a spot, fall back to spot evaluation
         if let spot = scan.spot { return status(for: spot, now: now, leadMinutes: leadMinutes) }
@@ -167,9 +126,10 @@ struct ParkingSignalEvaluator {
     }
 
     static func status(for restrictions: [Restriction], now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
-        let cal = Calendar.current
-
+        guard !restrictions.contains(where: { $0.needsReview || $0.type == .other }) else { return .gray }
         func isActive(_ r: Restriction) -> Bool {
+            var cal = Calendar.current
+            if let zone = r.spot.flatMap({ TimeZone(identifier: $0.timeZoneIdentifier) }) { cal.timeZone = zone }
             let sh = cal.component(.hour, from: r.startTime)
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)
@@ -185,7 +145,7 @@ struct ParkingSignalEvaluator {
         // BLUE: permit/ADA required active now
         if restrictions.contains(where: { r in r.type == .permit && isActive(r) }) { return .blue }
         // PURPLE: metered active now
-        if restrictions.contains(where: { r in r.type == .metered && isActive(r) }) { return .purple }
+        if restrictions.contains(where: { r in (r.type == .metered || r.type == .timeLimited) && isActive(r) }) { return .purple }
 
         // YELLOW: next illegal start within leadMinutes
         if let next = nextIllegalStart(from: restrictions, now: now) {
@@ -200,6 +160,7 @@ struct ParkingSignalEvaluator {
 
     // Evaluate from an AIAnalysisResponse (pre‑save preview)
     static func status(for analysis: AIAnalysisResponse, now: Date = Date(), leadMinutes: Int = 15) -> ParkingSignalStatus {
+        guard !analysis.restrictions.contains(where: \.requiresReview) else { return .gray }
         let cal = Calendar.current
 
         func parseHHmm(_ s: String) -> (Int, Int)? {
@@ -209,7 +170,6 @@ struct ParkingSignalEvaluator {
         }
         func isActive(_ r: AIRestriction) -> Bool {
             // Duration-only restrictions are treated as active now (time-limited parking).
-            if let dur = r.durationMinutes, dur > 0 { return true }
             guard let s = parseHHmm(r.startTime), let e = parseHHmm(r.endTime) else { return false }
             return DateTimeUtils.isWindowActive(startHour: s.0, startMinute: s.1, endHour: e.0, endMinute: e.1,
                                                 days: r.daysOfWeek, now: now, calendar: cal)
@@ -222,7 +182,7 @@ struct ParkingSignalEvaluator {
         // BLUE
         if analysis.restrictions.contains(where: { $0.type == .permit && isActive($0) }) { return .blue }
         // PURPLE
-        if analysis.restrictions.contains(where: { $0.type == .metered && isActive($0) }) { return .purple }
+        if analysis.restrictions.contains(where: { ($0.type == .metered || $0.type == .time_limited) && isActive($0) }) { return .purple }
 
         // YELLOW: next illegal start within leadMinutes
         if let next = nextIllegalStart(for: analysis, from: now) {
@@ -237,80 +197,37 @@ struct ParkingSignalEvaluator {
 
     // MARK: - Helpers
 
-    private static func nextIllegalStart(for spot: ParkingSpot, from now: Date) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        for r in spot.restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
+    /// Earliest future start of a blocking (No Parking / Street Cleaning) window.
+    private static func nextIllegalStart(from restrictions: [Restriction], now: Date) -> Date? {
+        return restrictions
+            .filter { $0.type == .noParking || $0.type == .streetCleaning }
+            .compactMap { r in
+                var cal = Calendar.current
+                if let zone = r.spot.flatMap({ TimeZone(identifier: $0.timeZoneIdentifier) }) { cal.timeZone = zone }
+                return nextStart(days: r.daysOfWeek,
+                          hour: cal.component(.hour, from: r.startTime),
+                          minute: cal.component(.minute, from: r.startTime),
+                          now: now, calendar: cal)
             }
-        }
-        return best
+            .min()
     }
 
     private static func nextIllegalStart(for analysis: AIAnalysisResponse, from now: Date) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func parseHHmm(_ s: String) -> (Int, Int)? {
-            let parts = s.split(separator: ":")
-            guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]), (0..<24).contains(h), (0..<60).contains(m) else { return nil }
-            return (h, m)
-        }
-        var best: Date? = nil
-        for r in analysis.restrictions where (r.type == .no_parking || r.type == .street_cleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            guard let (h, m) = parseHHmm(r.startTime) else { continue }
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
+        analysis.restrictions
+            .filter { $0.type == .no_parking || $0.type == .street_cleaning }
+            .compactMap { r in
+                DateTimeUtils.parseHHmm(r.startTime).flatMap { t in
+                    nextStart(days: r.daysOfWeek, hour: t.hour, minute: t.minute, now: now, calendar: .current)
+                }
             }
-        }
-        return best
+            .min()
     }
 
-    private static func nextIllegalStart(from restrictions: [Restriction], now: Date) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        for r in restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
-            }
-        }
-        return best
+    /// Empty days mean "every day", matching `DateTimeUtils.isWindowActive`.
+    private static func nextStart(days: [Int], hour: Int, minute: Int, now: Date, calendar: Calendar) -> Date? {
+        DateTimeUtils.nextOccurrence(daysOfWeek: days.isEmpty ? Array(0...6) : days,
+                                     hour: hour, minute: minute,
+                                     from: now, calendar: calendar, lookaheadDays: 13)
     }
 
 }

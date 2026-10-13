@@ -88,7 +88,7 @@ struct SegmentMapEditorView: View {
                                     }
                                     .onEnded { _ in
                                         dragStartPoint = nil
-                                        try? context.save()
+                                        context.saveOrReport()
                                     }
                             )
                         }
@@ -144,7 +144,7 @@ struct SegmentMapEditorView: View {
                                             scan.longitude = adjusted.longitude
                                         }
                                         .onEnded { _ in
-                                            try? context.save()
+                                            context.saveOrReport()
                                         }
                                 )
                             }
@@ -163,7 +163,7 @@ struct SegmentMapEditorView: View {
                                     scan.segmentCenterLat = coord.latitude
                                     scan.segmentCenterLon = coord.longitude
                                 }
-                                try? context.save()
+                                context.saveOrReport()
                                 recenter()
                             }
                         }
@@ -195,7 +195,7 @@ struct SegmentMapEditorView: View {
                         .pickerStyle(.segmented)
                         .onChange(of: segSide) { _, newValue in
                             scan.segmentStreetSide = newValue.rawValue
-                            try? context.save()
+                            context.saveOrReport()
                         }
 
                         HStack(spacing: 8) {
@@ -205,7 +205,7 @@ struct SegmentMapEditorView: View {
                         }
                         Slider(value: $segRadius, in: 5...50, step: 1) { _ in
                             scan.segmentRadius = segRadius
-                            try? context.save()
+                            context.saveOrReport()
                         }
 
                         Toggle("Tap to set direction", isOn: $settingDirection)
@@ -221,7 +221,7 @@ struct SegmentMapEditorView: View {
                             if on {
                                 scan.segmentCenterLat = scan.latitude
                                 scan.segmentCenterLon = scan.longitude
-                                try? context.save()
+                                context.saveOrReport()
                             }
                         }))
 
@@ -232,19 +232,19 @@ struct SegmentMapEditorView: View {
                                 Button("Clear") {
                                     segDirection = nil
                                     scan.segmentDirection = nil
-                                    try? context.save()
+                                    context.saveOrReport()
                                 }
                             }
                             Slider(value: Binding(get: { segDirection ?? 0 }, set: { newVal in
                                 segDirection = newVal
                                 scan.segmentDirection = newVal
-                                try? context.save()
+                                context.saveOrReport()
                             }), in: 0...360, step: 1)
                         } else {
                             Button {
                                 segDirection = 0
                                 scan.segmentDirection = 0
-                                try? context.save()
+                                context.saveOrReport()
                             } label: {
                                 Label("Enable Direction Slider", systemImage: "arrow.triangle.turn.up.right.diamond")
                             }
@@ -255,7 +255,7 @@ struct SegmentMapEditorView: View {
             .navigationTitle("Edit Segment")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { try? context.save(); dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { context.saveOrReport(); dismiss() } }
             }
         }
     }

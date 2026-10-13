@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- ParkSignal AI does not track users and transmits no data off device (v1 is on-device, single-user). -->
+	<!-- ParkSignal AI has no tracking SDK. Private CloudKit sync and Apple services are described in the privacy policy; validate App Store privacy answers against the signed release. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>

@@ -20,7 +20,9 @@ struct MapView: View {
     @Query private var scans: [SignScan]
     @Query private var sessions: [ParkSession]    // <- Added this line
     @Environment(\.modelContext) private var _modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedScan: SignScan? = nil
+    @State private var showingLegend = false
 
     @State private var cityOverlays: [ZoneOverlay] = []
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
@@ -141,15 +143,17 @@ struct MapView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                             }
-                            Text(status.label)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(status.color.opacity(0.12))
-                                .foregroundStyle(status.color)
-                                .clipShape(Capsule())
+                            if !dynamicTypeSize.isAccessibilitySize {
+                                Text(status.label)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.regularMaterial, in: Capsule())
+                                    .foregroundStyle(.primary)
+                            }
                         }
-                        .accessibilityLabel("Sign scan: \(scan.address ?? "Unknown")")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Sign scan: \(scan.address ?? "Unknown"), \(status.label)")
                         .onLongPressGesture {
                             isEditingSegments = true
                             editingScanID = scan.id
@@ -173,7 +177,7 @@ struct MapView: View {
                                         scan.segmentCenterLat = newCoord.latitude
                                         scan.segmentCenterLon = newCoord.longitude
                                     }
-                                    .onEnded { _ in try? _modelContext.save() }
+                                    .onEnded { _ in _modelContext.saveOrReport() }
                                 )
                                 .onTapGesture { editingScanID = scan.id }
                         }
@@ -202,7 +206,7 @@ struct MapView: View {
                                             scan.segmentDirection = CurbGeometry.normalizedHeading(newDir)
                                             scan.segmentRadius = max(5.0, dist)
                                         }
-                                        .onEnded { _ in try? _modelContext.save() }
+                                        .onEnded { _ in _modelContext.saveOrReport() }
                                     )
                             }
                             // Handle at end
@@ -222,7 +226,7 @@ struct MapView: View {
                                             scan.segmentDirection = CurbGeometry.normalizedHeading(newDir)
                                             scan.segmentRadius = max(5.0, dist)
                                         }
-                                        .onEnded { _ in try? _modelContext.save() }
+                                        .onEnded { _ in _modelContext.saveOrReport() }
                                     )
                             }
                         }
@@ -243,7 +247,7 @@ struct MapView: View {
                                         scan.latitude = newCoord.latitude
                                         scan.longitude = newCoord.longitude
                                     }
-                                    .onEnded { _ in try? _modelContext.save() }
+                                    .onEnded { _ in _modelContext.saveOrReport() }
                                 )
                                 .onTapGesture { editingScanID = scan.id }
                         }
@@ -285,7 +289,7 @@ struct MapView: View {
                                 .shadow(radius: 1)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Open \(spot.location)")
+                        .accessibilityLabel("Open \(spot.location), \(ParkingSignalEvaluator.status(for: spot, now: now, leadMinutes: leadMinutes).label)")
                     }
                 }
 
@@ -323,12 +327,14 @@ struct MapView: View {
                         }
                     }) {
                         Image(systemName: isEditingSegments ? "checkmark.circle" : "pencil.and.outline")
-                            .font(.title3)
+                            .font(.system(size: 20))
                             .foregroundColor(.primary)
                             .padding(8)
+                            .frame(minWidth: 44, minHeight: 44)
                             .background(.thinMaterial)
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel(isEditingSegments ? "Finish editing curb segments" : "Edit curb segments")
                 }
                 .padding(8)
                 .background(.thinMaterial)
@@ -338,20 +344,32 @@ struct MapView: View {
             }
             .overlay(alignment: .topLeading) {
                 if showLegend {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) { ColorSwatch(hex: "4CD964"); Text("Safe to Park").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "FF3B30"); Text("Illegal Now").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "FFCC00"); Text("Restriction Soon").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "007AFF"); Text("Permit/ADA").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "AF52DE"); Text("Metered/Paid").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "8E8E93"); Text("Unknown").font(.caption) }
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Button { showingLegend = true } label: {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 20))
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("Map legend")
+                        .accessibilityHint("Explains the saved-rule indicators")
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding()
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) { ColorSwatch(hex: "4CD964"); Text("No saved rule active").font(.caption) }
+                            HStack(spacing: 6) { ColorSwatch(hex: "FF3B30"); Text("Restriction active").font(.caption) }
+                            HStack(spacing: 6) { ColorSwatch(hex: "FFCC00"); Text("Restriction Soon").font(.caption) }
+                            HStack(spacing: 6) { ColorSwatch(hex: "007AFF"); Text("Permit/ADA").font(.caption) }
+                            HStack(spacing: 6) { ColorSwatch(hex: "AF52DE"); Text("Payment / time limit").font(.caption) }
+                            HStack(spacing: 6) { ColorSwatch(hex: "8E8E93"); Text("Check signs").font(.caption) }
+                        }
+                        .padding(8)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.1), lineWidth: 0.5))
+                        .shadow(radius: 1)
+                        .padding()
                     }
-                    .padding(8)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.1), lineWidth: 0.5))
-                    .shadow(radius: 1)
-                    .padding()
                 }
             }
             .onAppear {
@@ -390,6 +408,25 @@ struct MapView: View {
                 SignScanEditView(scan: scan)
                     .environment(\.modelContext, _modelContext)
             }
+            .sheet(isPresented: $showingLegend) {
+                NavigationStack {
+                    List(ParkingSignalStatus.allCases, id: \.self) { status in
+                        HStack(alignment: .top) {
+                            Image(systemName: status.iconName)
+                                .foregroundStyle(status.color)
+                                .accessibilityHidden(true)
+                            Text(status.label)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .navigationTitle("Map Legend")
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingLegend = false }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -424,7 +461,7 @@ struct MapView: View {
     private enum SpotStatus { case parked, notAllowed, soon, normal }
 
     private func spotStatus(for spot: ParkingSpot) -> SpotStatus {
-        if spot.parkSessions.contains(where: { $0.endedAt == nil }) { return .parked }
+        if spot.parkSessionsList.contains(where: { $0.endedAt == nil }) { return .parked }
         if spot.isRestrictedNow(at: now) { return .notAllowed }
         if let next = spot.nextRestrictionDate(from: now), next.timeIntervalSinceNow <= 2 * 60 * 60 { return .soon }
         return .normal
@@ -526,4 +563,3 @@ private extension MapView {
         return .accentColor
     }
 }
-

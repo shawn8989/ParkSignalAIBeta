@@ -1,54 +1,54 @@
 # ParkSignal AI — Privacy Policy
 
-_Last updated: [DATE]_
+Effective October 12, 2026. This policy describes the free v1 release.
 
-ParkSignal AI ("the app") is designed to keep your data on your device. This
-policy explains what the app accesses and why.
+ParkSignal reads parking-sign text on your device and helps you save spots, cars,
+photos, rules and reminders. It has no app account, advertising, analytics SDK or
+OpenAI integration. We do not operate a server that receives your parking records.
 
-## The short version
+## On-device processing and permissions
 
-- The app **does not collect, transmit, sell, or share any personal data.**
-- Everything you create — parking spots, scans, photos, restrictions, alarms —
-  is stored **only on your device**.
-- There are **no accounts, no analytics, no advertising, and no third‑party
-  tracking.**
+Camera and selected photo-library images are used for Apple's on-device text
+recognition. You choose which photos to save. Location while using the app places
+spots on the map. Apple Maps and address lookup use Apple's services and may
+communicate location-related information to Apple. Camera and location access can
+be changed in iOS Settings; manual saved-spot features do not need the camera.
+Notifications and system alarms run on each device, subject to the permissions
+you grant. Reminder preferences and scheduling records stay on that device.
 
-## What the app accesses on your device
+## iCloud and backups
 
-- **Camera** — to take a photo of a parking sign so the app can read it. Sign
-  text is recognized **on your device** using Apple's on‑device text
-  recognition. Photos are saved locally in the app and are not uploaded.
-- **Photo Library** — only if you choose an existing photo of a sign to
-  analyze. The app reads the photo you pick; it does not scan your library.
-- **Location (while using the app)** — to show nearby parking spots on the map
-  and to check the rules for where you are parked. Your location is used on the
-  device and is **not** sent to us or anyone else.
-- **Notifications & Alarms** — to remind you before a parking restriction
-  starts. Scheduled locally on your device.
-- **Local storage (UserDefaults / on‑device database)** — to remember your
-  settings and your saved spots between launches.
+When iCloud is available and enabled for ParkSignal, SwiftData/CloudKit is configured
+to synchronize your saved parking records and photo data through your private
+CloudKit database associated with your Apple Account. This means those records
+and photos can leave the device for Apple's iCloud service. The developer does
+not receive a copy on a separate server. Sync can be delayed or unavailable;
+Settings shows storage status. Do not treat this as a guarantee that every item
+has been backed up until you have verified it on another device.
 
-## What we collect
+Apple's iCloud and device-backup settings and Apple's privacy policy apply to
+those services. Turning off iCloud does not automatically delete existing cloud
+copies. Deleting the app removes its local storage but may leave iCloud data or
+system backups that can restore later.
 
-Nothing. The app has no servers and makes no network requests to us. Because
-your data never leaves your device, we cannot see it, and deleting the app
-removes it.
+## Retention and deletion
 
-> Note: A future version of the app may offer an **optional** cloud "Smart
-> Scan" feature that sends sign text to an AI service for higher‑accuracy
-> interpretation. That feature will be clearly opt‑in, and this policy will be
-> updated before it ships to describe exactly what is sent and to whom.
+Your saved records remain until you delete them. Delete spots, scans or photos in
+the app; when sync is working, the associated record deletions can propagate to
+your other devices. If you want to remove iCloud copies, also use Apple's iCloud
+storage controls. Backup retention is controlled by Apple and your account settings.
+We cannot retrieve or delete your private CloudKit records from a developer server.
 
-## Children's privacy
+## Support and sharing
 
-The app is not directed at children and collects no personal information from
-anyone.
+Support is available at https://github.com/shawn8989/ParkSignalAIBeta/issues.
+Submitting an issue is optional and publishes what you write on GitHub. Do not
+post license plates, home addresses, precise parking locations, account details
+or private photos. GitHub's privacy policy applies to information you submit there.
 
-## Changes to this policy
+## Tracking and future changes
 
-If this policy changes, the updated version will be posted here with a new
-"Last updated" date.
-
-## Contact
-
-Questions about this policy: **[your contact email]**
+ParkSignal does not include ads, cross-app tracking or sale of personal data.
+Cloud AI and purchases are not part of this release. Any future cloud processing
+will require updated disclosures and an explicit choice before content is sent.
+This page will be updated if the app's practices change.

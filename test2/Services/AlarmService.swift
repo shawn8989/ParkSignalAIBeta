@@ -30,7 +30,10 @@ final class AlarmService: ObservableObject {
         UserDefaults.standard.set(value, forKey: authCacheKey)
     }
     func isAuthorizedCached() -> Bool {
-        return UserDefaults.standard.bool(forKey: authCacheKey)
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) { return AlarmManager.shared.authorizationState == .authorized }
+        #endif
+        return false
     }
 
     private let metadataKey = "AlarmService.Metadata"
@@ -43,9 +46,11 @@ final class AlarmService: ObservableObject {
         UserDefaults.standard.set(dict, forKey: metadataKey)
     }
 
-    private func saveMetadata(forAlarmID alarmID: UUID?, notificationIdentifier: String?, carID: UUID?, spotID: UUID?) {
+    private func saveMetadata(forAlarmID alarmID: UUID?, notificationIdentifier: String?, carID: UUID?, spotID: UUID?, endDate: Date? = nil, title: String? = nil) {
         var dict = loadMetadata()
         var payload: [String: String] = [:]
+        if let endDate { payload["endDate"] = String(endDate.timeIntervalSince1970) }
+        if let title { payload["title"] = title }
         if let carID { payload["car"] = carID.uuidString }
         if let spotID { payload["spot"] = spotID.uuidString }
         if let alarmID { dict[alarmID.uuidString] = payload }
@@ -163,40 +168,41 @@ final class AlarmService: ObservableObject {
             self.objectWillChange.send()
             let endDate = Date().addingTimeInterval(seconds)
             // Save metadata for routing
-            saveMetadata(forAlarmID: id, notificationIdentifier: nil, carID: carID, spotID: spotID)
+            saveMetadata(forAlarmID: id, notificationIdentifier: nil, carID: carID, spotID: spotID, endDate: endDate, title: String(localized: title))
             return SimpleAlarm(id: id, title: String(localized: title), endDate: endDate, raw: alarm, source: .alarmKit, notificationIdentifier: nil, carID: carID, spotID: spotID)
         } else {
-            return await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
+            return try await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
         }
         #else
-        return await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
+        return try await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
         #endif
         #else
-        return await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
+        return try await scheduleFallbackLocalNotification(seconds: seconds, title: String(localized: title), carID: carID, spotID: spotID)
         #endif
     }
 
     // MARK: - Query
 
     func allAlarms() async -> [SimpleAlarm] {
+        do { return try await checkedAlarms() }
+        catch { AppIssueStore.shared.message = "Couldn’t read active alarms: \(error.localizedDescription)"; return [] }
+    }
+
+    func checkedAlarms() async throws -> [SimpleAlarm] {
         var results: [SimpleAlarm] = []
 
         // AlarmKit alarms
         #if canImport(AlarmKit)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), AlarmManager.shared.authorizationState == .authorized {
             do {
                 let alarms = try AlarmManager.shared.alarms
                 let mapped: [SimpleAlarm] = alarms.map { alarm in
-                    let endDate: Date
-                    if let cd = alarm.countdownDuration, let pre = cd.preAlert {
-                        endDate = Date().addingTimeInterval(pre)
-                    } else {
-                        endDate = Date()
-                    }
+                    let payload = loadMetadata()[alarm.id.uuidString] ?? [:]
+                    let endDate = payload["endDate"].flatMap(Double.init).map(Date.init(timeIntervalSince1970:)) ?? Date()
                     let meta = metadata(forAlarmID: alarm.id)
                     return SimpleAlarm(
                         id: alarm.id,
-                        title: "Parking Alarm",
+                        title: payload["title"] ?? "Parking Alarm",
                         endDate: endDate,
                         raw: alarm,
                         source: .alarmKit,
@@ -206,7 +212,7 @@ final class AlarmService: ObservableObject {
                     )
                 }
                 results.append(contentsOf: mapped)
-            } catch { }
+            } catch { throw error }
         }
         #endif
 
@@ -217,7 +223,7 @@ final class AlarmService: ObservableObject {
             if let trig = r.trigger as? UNCalendarNotificationTrigger, let next = trig.nextTriggerDate() {
                 endDate = next
             } else if let trig = r.trigger as? UNTimeIntervalNotificationTrigger {
-                endDate = Date().addingTimeInterval(trig.timeInterval)
+                endDate = trig.nextTriggerDate() ?? Date()
             }
             // Parse identifier for car/spot
             var parsedCar: UUID? = nil
@@ -234,8 +240,8 @@ final class AlarmService: ObservableObject {
             }
             // Merge with metadata store
             let meta = metadata(forNotificationIdentifier: r.identifier)
-            let carID = parsedCar ?? meta.car
-            let spotID = parsedSpot ?? meta.spot
+            let carID = parsedCar ?? meta.car ?? (r.content.userInfo["carID"] as? String).flatMap(UUID.init(uuidString:))
+            let spotID = parsedSpot ?? meta.spot ?? (r.content.userInfo["spotID"] as? String).flatMap(UUID.init(uuidString:))
 
             let simple = SimpleAlarm(
                 id: UUID(),
@@ -258,12 +264,16 @@ final class AlarmService: ObservableObject {
     /// Cancel a scheduled alarm by its identifier.
     /// - Parameter id: The UUID of the alarm to cancel.
     func cancel(id: UUID) async {
+        do { try await cancelChecked(id: id) }
+        catch { AppIssueStore.shared.message = "Couldn’t cancel the alarm: \(error.localizedDescription)" }
+    }
+
+    func cancelChecked(id: UUID) async throws {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
-            do {
-                try AlarmManager.shared.cancel(id: id)
-                self.objectWillChange.send()
-            } catch { }
+            guard try AlarmManager.shared.alarms.contains(where: { $0.id == id }) else { return }
+            try AlarmManager.shared.cancel(id: id)
+            self.objectWillChange.send()
         }
         #endif
     }
@@ -272,6 +282,20 @@ final class AlarmService: ObservableObject {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
         self.objectWillChange.send()
+    }
+
+    /// Cancel every alarm or fallback notification tagged with this car.
+    func cancelAlarms(forCarID carID: UUID) async {
+        for alarm in await allAlarms() where alarm.carID == carID {
+            switch alarm.source {
+            case .alarmKit:
+                await cancel(id: alarm.id)
+            case .notification:
+                if let identifier = alarm.notificationIdentifier {
+                    await cancelNotification(identifier: identifier)
+                }
+            }
+        }
     }
 
     /// Cancel all scheduled alarms — both AlarmKit alarms and pending local notifications.
@@ -285,7 +309,7 @@ final class AlarmService: ObservableObject {
                 }
                 self.objectWillChange.send()
             } catch {
-                // ignore failures
+                AppIssueStore.shared.message = "Some alarms could not be cancelled: \(error.localizedDescription)"
             }
         }
         #endif
@@ -307,12 +331,12 @@ final class AlarmService: ObservableObject {
     }
 
     // Fallback: schedule a local notification when AlarmKit isn't available
-    private func scheduleFallbackLocalNotification(seconds: TimeInterval, title: String, carID: UUID?, spotID: UUID?) async -> SimpleAlarm {
+    private func scheduleFallbackLocalNotification(seconds: TimeInterval, title: String, carID: UUID?, spotID: UUID?) async throws -> SimpleAlarm {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
-            _ = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
-        }
+            guard try await center.requestAuthorization(options: [.alert, .badge, .sound]) else { throw AlarmError.notAuthorized }
+        } else if settings.authorizationStatus == .denied { throw AlarmError.notAuthorized }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = "Timer finished."
@@ -323,12 +347,10 @@ final class AlarmService: ObservableObject {
         let uuid = UUID()
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, seconds), repeats: false)
         let request = UNNotificationRequest(identifier: uuid.uuidString, content: content, trigger: trigger)
-        do {
-            try await center.add(request)
-        } catch { }
+        try await center.add(request)
         let endDate = Date().addingTimeInterval(seconds)
         // Save metadata for routing
-        saveMetadata(forAlarmID: uuid, notificationIdentifier: uuid.uuidString, carID: carID, spotID: spotID)
+        saveMetadata(forAlarmID: uuid, notificationIdentifier: uuid.uuidString, carID: carID, spotID: spotID, endDate: endDate, title: title)
         return SimpleAlarm(id: uuid, title: title, endDate: endDate, raw: nil, source: .notification, notificationIdentifier: uuid.uuidString, carID: carID, spotID: spotID)
     }
 }

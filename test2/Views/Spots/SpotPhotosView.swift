@@ -18,7 +18,7 @@ struct SpotPhotosView: View {
             } else {
                 ForEach(spot.streetPhotoFilenames, id: \.self) { filename in
                     HStack {
-                        if let image = ImageStore.loadImage(named: filename) {
+                        if let image = ImageStore.loadImage(named: filename, context: context) {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
@@ -36,9 +36,10 @@ struct SpotPhotosView: View {
                 }
                 .onDelete { indexSet in
                     let names = indexSet.map { spot.streetPhotoFilenames[$0] }
-                    for n in names { ImageStore.deleteImage(named: n) }
                     spot.streetPhotoFilenames.remove(atOffsets: indexSet)
-                    try? context.save()
+                    guard context.saveOrReport() else { return }
+                    do { for n in names { try ImageStore.deleteImage(named: n, context: context) } }
+                    catch { AppIssueStore.shared.message = "Couldn’t remove photo data: \(error.localizedDescription)" }
                 }
             }
         }
@@ -72,20 +73,20 @@ struct SpotPhotosView: View {
         guard let item else { return }
         do {
             if let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                if let filename = try? ImageStore.saveJPEG(image) {
-                    spot.addStreetPhoto(filename: filename)
-                    try? context.save()
-                }
+                let filename = try ImageStore.saveJPEG(image, context: context)
+                spot.addStreetPhoto(filename: filename)
+                context.saveOrReport()
             }
-        } catch { }
+        } catch { AppIssueStore.shared.message = "Couldn’t import photo: \(error.localizedDescription)" }
     }
 
     private func saveTakenImage() async {
         guard let image = takenImage else { return }
-        if let filename = try? ImageStore.saveJPEG(image) {
+        do {
+            let filename = try ImageStore.saveJPEG(image, context: context)
             spot.addStreetPhoto(filename: filename)
-            try? context.save()
-        }
+            context.saveOrReport()
+        } catch { AppIssueStore.shared.message = "Couldn’t save photo: \(error.localizedDescription)" }
         isCamera = false
     }
 }

@@ -18,7 +18,6 @@ struct SignScanEditView: View {
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
     // Parsing services
-    private let aiService = AIAnalyzerService()
     private let localParser = ParkingTextParser()
 
     @State private var isAnalyzingScan: Bool = false
@@ -32,11 +31,14 @@ struct SignScanEditView: View {
     @State private var segDirection: Double = 0
 
     @State private var showSegmentMapEditor = false
+    @State private var reviewAnalysis: AIAnalysisResponse?
+    @State private var showRuleReview = false
+    @State private var editedText = ""
 
     var body: some View {
         Form {
             Section("OCR Text") {
-                TextEditor(text: $scan.ocrText)
+                TextEditor(text: $editedText)
                     .frame(minHeight: 120)
             }
             Section("Location") {
@@ -59,7 +61,8 @@ struct SignScanEditView: View {
                     }
                 }
             }
-            Section("Segment") {
+            Section {
+                DisclosureGroup("Advanced curb geometry") {
                 // Side picker
                 Picker("Side", selection: $segSide) {
                     Text("Left").tag(StreetSide.left)
@@ -165,6 +168,7 @@ struct SignScanEditView: View {
                     Label("Edit on Map", systemImage: "map")
                 }
             }
+            }
             Section("Photo") {
                 if let uiImage = loadScanUIImage() {
                     Image(uiImage: uiImage)
@@ -199,8 +203,12 @@ struct SignScanEditView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
-                    // The scan is a SwiftData @Model instance; just save changes.
-                    try? modelContext.save()
+                    if editedText != (scan.mergedOCRText.isEmpty ? scan.ocrText : scan.mergedOCRText) {
+                        scan.ocrText = editedText
+                        scan.mergedOCRText = editedText
+                        invalidateRules()
+                    }
+                    do { try modelContext.save() } catch { analyzeError = error.localizedDescription; return }
                     dismiss()
                 }
             }
@@ -209,6 +217,7 @@ struct SignScanEditView: View {
             }
         }
         .onAppear {
+            editedText = scan.mergedOCRText.isEmpty ? scan.ocrText : scan.mergedOCRText
             // Initialize segment editing state from current scan values
             let sideRaw = (scan.segmentStreetSide ?? scan.spot?.streetSide ?? "right").lowercased()
             segSide = StreetSide(rawValue: sideRaw) ?? .right
@@ -227,12 +236,20 @@ struct SignScanEditView: View {
                 if let addr = await reverseGeocode(coord) {
                     resolvedAddress = addr
                     scan.address = addr
-                    try? modelContext.save()
+                    do { try modelContext.save() } catch { analyzeError = error.localizedDescription; return }
                 } else {
                     resolvedAddress = nil
                 }
             } else {
                 resolvedAddress = scan.address
+            }
+        }
+        .sheet(isPresented: $showRuleReview) {
+            if let analysis = reviewAnalysis, let spot = scan.spot {
+                AnalysisConfirmationView(spot: spot, sourceUser: LocalIdentity.userID,
+                    ocrText: editedText,
+                    photoFilename: scan.photoFilenames.first ?? scan.photoFilename,
+                    analysis: analysis, scan: scan)
             }
         }
         .sheet(isPresented: $showSegmentMapEditor) {
@@ -248,98 +265,20 @@ struct SignScanEditView: View {
         isAnalyzingScan = true
         defer { isAnalyzingScan = false }
 
-        let text = (scan.mergedOCRText.isEmpty ? scan.ocrText : scan.mergedOCRText).trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { analyzeError = "No OCR text to analyze."; return }
 
-        do {
-            // Prefer AI; fallback to local
-            let parsed: AIAnalysisResponse
-            do {
-                let result = try await aiService.analyzeWithDebug(ocrText: text)
-                parsed = result.parsed
-                if let data = try? JSONEncoder().encode(parsed), let s = String(data: data, encoding: .utf8) {
-                    scan.aiAnalysisText = s
-                }
-            } catch {
-                let local = localParser.analyze(ocrText: text)
-                parsed = local
-                if let data = try? JSONEncoder().encode(local), let s = String(data: data, encoding: .utf8) {
-                    scan.localAnalysisText = s
-                } else {
-                    scan.localAnalysisText = String(describing: local)
-                }
-            }
+        guard scan.spot != nil else { analyzeError = "Attach the scan to a saved spot before reviewing rules."; return }
+        reviewAnalysis = localParser.analyze(ocrText: text)
+        showRuleReview = true
+    }
 
-            // Clear old restrictions linked to this scan
-            for r in scan.restrictions { modelContext.delete(r) }
-            scan.restrictions.removeAll()
-
-            // Map AIRestriction -> Restriction models and attach
-            let now = Date()
-            for r in parsed.restrictions {
-                let type: RestrictionType
-                switch r.type {
-                case .no_parking: type = .noParking
-                case .street_cleaning: type = .streetCleaning
-                case .permit: type = .permit
-                case .metered: type = .metered
-                default: type = .other
-                }
-
-                // Build start/end times
-                let (startDate, endDate): (Date, Date) = {
-                    if let dur = r.durationMinutes, dur > 0 {
-                        let s = now
-                        let e = now.addingTimeInterval(TimeInterval(dur * 60))
-                        return (s, e)
-                    }
-                    if let sHM = DateTimeUtils.parseHHmm(r.startTime), let eHM = DateTimeUtils.parseHHmm(r.endTime) {
-                        let s = DateTimeUtils.todayAt(hour: sHM.0, minute: sHM.1)
-                        var e = DateTimeUtils.todayAt(hour: eHM.0, minute: eHM.1)
-                        if e <= s { e = e.addingTimeInterval(24 * 60 * 60) }
-                        return (s, e)
-                    }
-                    let s = DateTimeUtils.todayAt(hour: 0, minute: 0)
-                    let e = s.addingTimeInterval(24 * 60 * 60)
-                    return (s, e)
-                }()
-
-                let restriction = Restriction(
-                    type: type,
-                    startTime: startDate,
-                    endTime: endDate,
-                    daysOfWeek: r.daysOfWeek,
-                    sourceUser: UUID(),
-                    signPhotoFilename: scan.photoFilenames.first ?? scan.photoFilename,
-                    ocrText: text,
-                    spot: scan.spot,
-                    scan: scan
-                )
-                modelContext.insert(restriction)
-                scan.restrictions.append(restriction)
-                // Also attach to spot if present so alarms can be scheduled against the spot
-                if let spot = scan.spot {
-                    spot.restrictions.append(restriction)
-                }
-            }
-
-            // Compute and store signal state
-            let status = ParkingSignalEvaluator.status(for: parsed, now: now, leadMinutes: leadMinutes)
-            scan.signalState = status.rawValue
-            scan.status = "complete"
-            scan.analyzedAt = now
-            try modelContext.save()
-
-            // Schedule alarms/notifications for the spot if linked
-            if let spot = scan.spot {
-                await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot)
-                analyzeInfo = "Analysis complete. Alarms scheduled for this spot."
-            } else {
-                analyzeInfo = "Analysis complete. Scan not linked to a spot."
-            }
-        } catch {
-            analyzeError = error.localizedDescription
-        }
+    private func invalidateRules() {
+        scan.needsReview = true
+        scan.status = "needsReview"
+        scan.signalState = "gray"
+        for rule in scan.restrictionsList { rule.needsReview = true }
+        Task { await ReminderCoordinator.shared.reconcile(context: modelContext) }
     }
 
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> String? {

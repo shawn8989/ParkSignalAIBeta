@@ -11,7 +11,7 @@ final class NotificationManager {
     var leadMinutes: Int {
         get {
             let value = UserDefaults.standard.integer(forKey: "alertLeadMinutes")
-            return value == 0 ? 15 : value
+            return UserDefaults.standard.object(forKey: "alertLeadMinutes") == nil ? 15 : max(0, value)
         }
         set {
             UserDefaults.standard.set(newValue, forKey: "alertLeadMinutes")
@@ -38,41 +38,8 @@ final class NotificationManager {
     }
 
     func schedule(for restrictions: [Restriction], spot: ParkingSpot) async {
-        let allowed: Set<RestrictionType> = [.streetCleaning, .noParking]
-        let center = UNUserNotificationCenter.current()
-        let ok = await requestAuthorizationIfNeeded()
-        guard ok else { return }
-
-        for r in restrictions where allowed.contains(r.type) {
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: r.startTime)
-            let startHour = comps.hour ?? 0
-            let startMinute = comps.minute ?? 0
-
-            for dow in r.daysOfWeek {
-                let lead = computeLead(weekday0_6: dow, startHour: startHour, startMinute: startMinute, leadMinutes: leadMinutes)
-                var dateComps = DateComponents()
-                dateComps.weekday = lead.weekday1_7
-                dateComps.hour = lead.hour
-                dateComps.minute = lead.minute
-
-                let content = UNMutableNotificationContent()
-                content.title = title(for: r)
-                content.body = "Starts at \(formatTime(r.startTime)) near \(spot.location)"
-                content.sound = .default
-                if #available(iOS 15.0, *) {
-                    content.interruptionLevel = .timeSensitive
-                }
-
-                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComps, repeats: true)
-                let id = "restriction.\(r.id.uuidString).\(lead.weekday1_7)"
-                let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-                do {
-                    NotificationLogStore.shared.appendScheduled(id: id, title: content.title, body: content.body, categoryIdentifier: content.categoryIdentifier.isEmpty ? nil : content.categoryIdentifier, scheduledFor: nil, userInfo: nil)
-                    try await center.add(request)
-                } catch {
-                    // Best-effort; ignore individual failures
-                }
-            }
+        if let context = spot.modelContext {
+            await ReminderCoordinator.shared.reconcile(context: context)
         }
     }
 

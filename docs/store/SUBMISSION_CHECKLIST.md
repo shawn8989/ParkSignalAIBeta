@@ -1,103 +1,122 @@
-# ParkSignal AI — v1.0 Submission Checklist
+# Free v1 release gates
 
-The remaining steps to ship v1.0. **These all require your Apple account,
-credentials, a device, or App Store Connect access — they can't be automated.**
-Do them roughly in order; the code itself is ready (builds clean, tests green).
+This is a candidate, not a certified release. Complete every gate before submission.
+The integrated implementation is on `codex/free-v1-release`; see `STATUS.md` for
+build evidence and the PR. Do not archive an older branch by mistake.
 
-Repo: `shawn8989/ParkSignalAIBeta` · Bundle ID: `com.SOTech.ParkSignalAI` ·
-Team: `EU6247328G` · iCloud container: `iCloud.com.SOTech.ParkSignalAI` ·
-iPhone-only (`TARGETED_DEVICE_FAMILY = 1`).
+## 1. Review the integration and preserve signing changes
 
----
+- Review the integration PR against main. It includes #23–25 plus parser,
+  confirmation, reminder, migration and release-copy fixes. It changes behavior
+  and the persistent schema, so it is intentionally left open for review.
+- Keep the original `test2` checkout's uncommitted `test2/test2.entitlements` safe.
+  It was not edited or committed by this work. Bring the owner's chosen capability
+  settings into the final release branch separately.
+- Xcode → target test2 → Signing & Capabilities: verify team `EU6247328G`, bundle
+  `com.SOTech.ParkSignalAI`, iCloud/CloudKit container
+  `iCloud.com.SOTech.ParkSignalAI`. Reconcile Push Notifications and Background
+  Modes → Remote notifications with the intended CloudKit configuration and profile.
+  This work does not change Push, entitlements, provisioning or account settings.
+  Do not claim background synchronization until it has been tested.
 
-## 1. Decide on Push Notifications
-You added the Push capability in Xcode, so `test2/test2.entitlements` currently
-has `aps-environment` back (uncommitted).
+## 2. Verify a signed build and existing-data upgrade on hardware
 
-- **Push is only needed for real-time _background_ sync** (silent pushes wake the
-  app to pull changes). Without it, CloudKit still syncs — just when the app is
-  foregrounded.
-- **Keep Push:** also add Background Modes → *Remote notifications* (removed
-  earlier), then commit the entitlements + `Info.plist` so the repo matches your
-  App ID. Signing works because the capability is enabled on the App ID.
-- **Drop Push:** remove the Push capability in Xcode (reverts `aps-environment`);
-  sync then happens on foreground only.
-- Either way, the **entitlements + provisioning profile must match the uploaded
-  build**, or the upload is rejected.
+Use a development device signed into the owner's iCloud account. Keep its existing
+data; do not delete the app to work around a migration error. Build/run the candidate
+from Xcode, open Settings → Storage & Sync and check status. A local-only message
+must be resolved before advertising sync. “iCloud available” alone is not proof
+of an upload.
 
-## 2. Create the CloudKit schema (Development)
-The schema (record types) only gets created when the app runs against a **real,
-authenticated iCloud account**. A simulator with no iCloud account won't do it.
+Unsigned simulators deliberately use local storage, avoiding a framework trap
+when CloudKit entitlements are absent. For an actually signed, iCloud-authenticated
+simulator only, add the launch argument `-EnableCloudKitSimulator` in Scheme →
+Run → Arguments. Do not add it to unsigned CI runs. A signed physical device uses
+CloudKit by default.
 
-1. On your iPhone (already signed into iCloud), or a simulator signed into iCloud:
-   run the app from Xcode (select the device → Run).
-2. Add or scan a spot.
-3. SwiftData auto-creates the `CD_*` record types in the container's **Development**
-   environment.
+## 3. Verify Development sync on two devices — required
 
-## 3. (Optional) Verify sync end-to-end
-Sign a second device (or simulator) into the same iCloud account, launch the app,
-and confirm the spot from step 2 appears. Confirms sync, not just schema creation.
+1. On device A, save a spot, a car, a reviewed rule and a sign/street photo; park.
+2. On device B, with the same iCloud account, verify records, relationships and
+   full photo images arrive. Confirm reminders are off until enabled on B.
+3. Edit a rule and end parking on A. Confirm B receives the change and updates its
+   own reminders if enabled. Delete a scan and confirm its rules disappear.
+4. Relaunch both apps; verify data remains. Test offline edits, reconnection and
+   permissions denied. Confirm existing data upgrades without loss.
+5. Record device/OS/build and observations. In-memory tests and an available
+   account do not demonstrate a real CloudKit transfer.
 
-## 4. Deploy the CloudKit schema Development → Production
-Only appears **after** step 2 has created the schema.
+## 4. Deploy the CloudKit schema
 
-1. Go to **[CloudKit Console](https://icloud.developer.apple.com/dashboard)** → sign in.
-2. Select container **`iCloud.com.SOTech.ParkSignalAI`**.
-3. Confirm the `CD_*` record types show under **Development → Schema → Record Types**.
-4. Click **Deploy Schema Changes…** (Development → Production) and confirm.
-   *(Required before the App Store build — the App Store app runs against Production.)*
+Open [CloudKit Console](https://icloud.developer.apple.com/), select the correct
+team and `iCloud.com.SOTech.ParkSignalAI`, then Development → Schema/Record Types.
+After the signed app exports test data, check its SwiftData `CD_*` record types,
+including PhotoBlob and the review/duration/time-zone fields. If none appear,
+inspect Xcode's CloudKit logs and account/container configuration first.
 
-## 5. Host the Privacy Policy & Support pages
-Both are ready in `docs/legal/` (`privacy.html`, `support.html`).
+Use the console's **Deploy Schema Changes** action, review the Development →
+Production changes, then deploy. This is an owner action. TestFlight and App Store
+builds use Production; perform the two-device test again with TestFlight before
+shipping. Schema deployment does not copy private test records into Production.
 
-1. Replace `{{SUPPORT_EMAIL}}` and `{{EFFECTIVE_DATE}}` in both files.
-2. Publish them — easiest is **GitHub Pages**: repo **Settings → Pages →** deploy
-   from `main`, folder `/docs`. Pages then serves them at
-   `https://<user>.github.io/ParkSignalAIBeta/legal/privacy.html` (and `support.html`).
-3. Note both URLs for App Store Connect (step 7).
+## 5. Real-world validation in TestFlight — about one week
 
-## 6. Real-device camera scan test
-On your iPhone: scan a real parking sign end-to-end (camera → on-device parse →
-signal → saved spot → set an alarm and confirm it fires). Confirms the release
-build works on hardware.
+- Photograph real signs in ordinary and poor lighting. Confirm OCR, days, hours,
+  separate maximum duration and original text. Reject suggestions that omit rules.
+- Monthly, seasonal, holiday and exemption signs must remain “Review required”
+  and never silently show green or schedule automatic reminders.
+- Test manual corrections, cancelling review, re-analysis, photo rehydration,
+  multiple cars and deleting a parked car/spot.
+- Verify a short hardware alarm and a normal scheduled reminder; test denied
+  permissions, cancelled alarms, lead-time changes, relaunch and synced changes.
+- Reminders use a rolling 14-day window capped at 48 upcoming events. Open the app
+  to extend it. Verify the limitation is acceptable for intended use.
+- Verify overnight/DST behavior where applicable, VoiceOver, large text and dark
+  mode on the supported devices. Simulator checks are not a hardware guarantee.
 
-## 7. Create the App Store Connect record + metadata
-In **[App Store Connect](https://appstoreconnect.apple.com)** → **Apps → +**.
+## 6. Review public pages and listing
 
-1. Platform iOS, name **ParkSignal AI**, primary language English, bundle ID
-   `com.SOTech.ParkSignalAI`, SKU (anything unique).
-2. Paste metadata from **`docs/store/APPSTORE.md`**: subtitle, promo text,
-   description, keywords, categories (Navigation / Utilities), copyright.
-3. **What's New**: paste the 1.0 release notes from `APPSTORE.md`.
-4. **Support URL** and **Privacy Policy URL**: the two hosted URLs from step 5.
-5. **App Privacy**: select **Data Not Collected** (matches `PrivacyInfo.xcprivacy`).
-6. **Age rating**: complete the questionnaire → **4+** (no objectionable content).
-7. **Screenshots** (6.9" iPhone): upload `docs/store/screenshots/iphone69-1…3`.
-   **Do not** upload `iphone69-4-alerts-DEBUGrows.png` (it shows DEBUG-only rows);
-   recapture from a Release build if you want a 4th. iPhone-only → no iPad shots.
+The following pages are published and were HTTP 200 on 2026-10-12:
 
-## 8. Archive & upload the build
-In Xcode:
+- [Privacy](https://shawn8989.github.io/ParkSignalAIBeta/legal/privacy.html)
+- [Support](https://shawn8989.github.io/ParkSignalAIBeta/legal/support.html)
 
-1. Select **Any iOS Device (arm64)**, scheme `test2`, **Release** config.
-2. Set/verify **Version** (1.0) and **Build** (1).
-3. **Product → Archive** → **Distribute App → App Store Connect → Upload**.
-4. Signing must use your Team `EU6247328G` with a profile that includes the
-   iCloud container (and Push, if kept in step 1).
-5. (Optional) Test via **TestFlight** first.
+Source is `docs/legal/`; hosting uses the separate `gh-pages` branch. Update both
+when changing policy copy. Support currently uses public GitHub issues; confirm
+that channel is monitored. No fabricated support email is published.
 
-## 9. Submit for review
-In App Store Connect: attach the uploaded build to the 1.0 version, answer the
-export-compliance question (no non-exempt encryption), add review notes if
-helpful (e.g. "on-device parking-sign reader; no account required"), and
-**Submit for Review**.
+Use `APPSTORE.md` for listing copy. Review the new Release captures and screenshot
+manifest; do not upload the historical DEBUG capture or stale earlier screens.
+The target is iPhone-only. Check Apple's current screenshot slots before uploading.
 
----
+## 7. App Store Connect setup — owner
 
-### Status of the code (done — no action needed)
-- ✅ v1 is iPhone-only, on-device, single-user; mock login/demo seed removed (DEBUG-gated).
-- ✅ `PrivacyInfo.xcprivacy` present (UserDefaults required-reason API); no tracking/collection.
-- ✅ CloudKit-compatible models; container with local-only fallback.
-- ✅ Unit tests green in CI (`-only-testing:test2Tests`); Debug + Release build clean.
-- ⏳ Compiler-warning cleanup and accessibility polish are tracked in `STATUS.md`.
+Apps → + → New App: iOS, ParkSignal AI, English, the bundle ID above, an owner-chosen
+SKU. Set free pricing. No ads, subscriptions or in-app purchases are part of v1.
+Paste the listing and public URLs; upload the approved screenshot set.
+
+Complete App Privacy using the actual release data flows and Apple's definitions.
+Private CloudKit records/photos and Apple map/address services are described in
+`PRIVACY.md`. Do not mechanically select “Data Not Collected” because OCR is local.
+Confirm developer/third-party access and retention before answering. Complete the
+current age-rating, export-compliance and distribution questionnaires honestly;
+do not reuse an assumed age rating from old notes. Privacy manifests and App Store
+privacy answers are separate requirements.
+
+## 8. Archive, upload, test Production, submit
+
+The owner has authorized the assistant to upload after readiness checks pass.
+Account sign-in/MFA, schema deployment and accurate submission answers still need
+the owner. An upload is not an automatic public release.
+
+Choose the reviewed integrated commit, verify a new build number, select Any iOS
+Device and Product → Archive. Validate in Organizer, then Distribute → App Store
+Connect. Verify archive entitlements/provisioning match the final capability choice.
+Upload to TestFlight, complete the Production sync/hardware checks above, then
+attach the approved build, review notes and contact details to the version and
+submit for review. Keep the final release manual until the owner approves it.
+
+## References
+
+- [Apple: SwiftData sync](https://developer.apple.com/documentation/swiftdata/syncing-model-data-across-a-persons-devices)
+- [Apple: screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications)
+- [Apple: App Privacy details](https://developer.apple.com/app-store/app-privacy-details/)

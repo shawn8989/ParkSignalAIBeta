@@ -19,11 +19,11 @@ struct ParkingSignScannerView: View {
     var onRequestQuickScan: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
 
     // Live parsing services
-    private let aiService = AIAnalyzerService()
     private let localParser = ParkingTextParser()
 
     // Live analysis state
@@ -204,7 +204,7 @@ struct ParkingSignScannerView: View {
                 CameraPicker { image in
                     // Save image via ImageStore and remember filename
                     self.capturedImage = image
-                    if let name = try? ImageStore.saveJPEG(image) {
+                    if let name = try? ImageStore.saveJPEG(image, context: modelContext) {
                         self.capturedFilename = name
                     }
                     if self.pendingLockAnalyze {
@@ -310,13 +310,7 @@ struct ParkingSignScannerView: View {
 
     @MainActor
     private func parseLive(text: String) async {
-        // Prefer AI analyzer; fall back to local parser on failure
-        do {
-            let result = try await aiService.analyzeWithDebug(ocrText: text)
-            self.liveAnalysis = result.parsed
-        } catch {
-            self.liveAnalysis = localParser.analyze(ocrText: text)
-        }
+        self.liveAnalysis = localParser.analyze(ocrText: text)
         if let analysis = self.liveAnalysis {
             let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
             self.liveSignal = status

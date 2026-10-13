@@ -23,8 +23,8 @@ enum SpotMergeService {
     /// The matched spot's coordinate is left as-is (a spot represents a block section,
     /// not wherever the latest sign happened to be scanned).
     @MainActor
-    static func findOrCreateSpot(address: String?, coordinate: CLLocationCoordinate2D, in context: ModelContext, preferredSide: String) -> ParkingSpot {
-        let allSpots = (try? context.fetch(FetchDescriptor<ParkingSpot>())) ?? []
+    static func findOrCreateSpot(address: String?, coordinate: CLLocationCoordinate2D, in context: ModelContext, preferredSide: String) throws -> ParkingSpot {
+        let allSpots = try context.fetch(FetchDescriptor<ParkingSpot>())
         let side = DrivingSide.side(fromAddress: address) ?? preferredSide
         let street = DrivingSide.streetKey(from: address)
         let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -58,7 +58,7 @@ enum SpotMergeService {
             )
             context.insert(primary)
         }
-        try? context.save()
+        do { try context.save() } catch { context.rollback(); throw error }
         return primary
     }
 
@@ -68,26 +68,27 @@ enum SpotMergeService {
         for s in spots {
             if s.id == primary.id { continue }
             // Move restrictions
-            for r in s.restrictions {
+            for r in s.restrictionsList {
                 r.spot = primary
-                if !primary.restrictions.contains(where: { $0.id == r.id }) {
-                    primary.restrictions.append(r)
+                if !primary.restrictionsList.contains(where: { $0.id == r.id }) {
+                    primary.restrictionsList.append(r)
                 }
             }
             // Move scans
-            for sc in s.signScans {
+            for sc in s.signScansList {
                 sc.spot = primary
-                if !primary.signScans.contains(where: { $0.id == sc.id }) {
-                    primary.signScans.append(sc)
+                if !primary.signScansList.contains(where: { $0.id == sc.id }) {
+                    primary.signScansList.append(sc)
                 }
             }
             // Move sessions
-            for sess in s.parkSessions {
+            for sess in s.parkSessionsList {
                 sess.spot = primary
             }
+            primary.streetPhotoFilenames = Array(Set(primary.streetPhotoFilenames + s.streetPhotoFilenames))
+            if primary.lastScanPhotoFilename == nil { primary.lastScanPhotoFilename = s.lastScanPhotoFilename }
             // Delete duplicate spot
             context.delete(s)
         }
-        try? context.save()
     }
 }

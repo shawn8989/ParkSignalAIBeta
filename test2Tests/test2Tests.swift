@@ -67,11 +67,5 @@ struct RestrictionFormattingTests {
         let expected = "\(formatter.string(from: start)) - \(formatter.string(from: end))"
         #expect(r.timeDescription == expected)
     }
-
-    @Test("SHA256 hashing returns 64 hex chars")
-    func sha256HashLength() async throws {
-        let hash = "password".sha256
-        #expect(hash.count == 64)
-    }
 }
 #endif

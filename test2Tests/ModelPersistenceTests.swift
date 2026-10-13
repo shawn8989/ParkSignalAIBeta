@@ -16,7 +16,7 @@ struct ModelPersistenceTests {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(
             for: User.self, Car.self, ParkingSpot.self, Restriction.self,
             ParkSession.self, SignScan.self, CurrentParking.self,
@@ -30,7 +30,7 @@ struct ModelPersistenceTests {
         let container = try makeContainer()
         let ctx = container.mainContext
 
-        let user = User(username: "shawn", email: "s@example.com", passwordHash: "x".sha256)
+        let user = User(username: "shawn", email: "s@example.com", passwordHash: "")
         let car = Car(nickname: "Civic", owner: user)
         let spot = ParkingSpot(location: "1 Test St", latitude: 1.0, longitude: 2.0, streetSide: "right")
         let restriction = Restriction(type: .noParking, startTime: Date(), endTime: Date(),
@@ -47,7 +47,7 @@ struct ModelPersistenceTests {
         // Users & the User→cars inverse
         let users = try ctx.fetch(FetchDescriptor<User>())
         #expect(users.count == 1)
-        #expect(users.first?.cars.count == 1)
+        #expect(users.first?.carsList.count == 1)
 
         // Car→owner relationship + default value
         let cars = try ctx.fetch(FetchDescriptor<Car>())
@@ -56,9 +56,9 @@ struct ModelPersistenceTests {
 
         // ParkingSpot inverses
         let spots = try ctx.fetch(FetchDescriptor<ParkingSpot>())
-        #expect(spots.first?.restrictions.count == 1)
-        #expect(spots.first?.signScans.count == 1)
-        #expect(spots.first?.parkSessions.count == 1)
+        #expect(spots.first?.restrictionsList.count == 1)
+        #expect(spots.first?.signScansList.count == 1)
+        #expect(spots.first?.parkSessionsList.count == 1)
 
         // Restriction→spot + bitmask-backed daysOfWeek survives a round-trip
         let restrictions = try ctx.fetch(FetchDescriptor<Restriction>())
@@ -89,7 +89,7 @@ struct ModelPersistenceTests {
         let r = Restriction(type: .noParking, startTime: at(8), endTime: at(18),
                             daysOfWeek: [], sourceUser: UUID(), spot: spot)
         ctx.insert(r)
-        spot.restrictions.append(r)
+        spot.restrictionsList.append(r)
         try ctx.save()
 
         #expect(ParkingSignalEvaluator.status(for: spot, now: now) == .red)
