@@ -158,7 +158,7 @@ struct SystemParkingAlerts: ParkingAlerts {
     }
     func scheduleMoveAlert(for car: Car, at spot: ParkingSpot) async {
         await ReminderCoordinator.shared.enable(context: context)
-        await ReminderCoordinator.shared.resumeCancelled(context: context)
+        await ReminderCoordinator.shared.resumeCancelled(context: context, carID: car.id)
     }
     func cancelMoveAlerts(forCarID carID: UUID) async {
         await ReminderCoordinator.shared.cancel(carID: carID)

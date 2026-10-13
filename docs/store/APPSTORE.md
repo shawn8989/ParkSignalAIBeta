@@ -65,6 +65,7 @@ is on-device. Enable reminders in Settings; unsupported sign conditions remain
 unresolved. iCloud uses the reviewer's own Apple Account if available.”
 
 ## Screenshots
+Read screenshots/MANIFEST.md first: this is not yet a complete approved upload set.
 Use only images in screenshots/release/ that have been visually checked against
 the final Release candidate. Earlier screenshots in screenshots/ are historical:
 they include sample-city UI and one DEBUG alarm screen and must not be uploaded.

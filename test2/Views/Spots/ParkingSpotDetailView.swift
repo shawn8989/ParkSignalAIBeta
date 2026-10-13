@@ -32,8 +32,6 @@ struct ParkingSpotDetailView: View {
     @State private var photoFilename: String?
     @State private var scanError: String?
 
-    @State private var usedAIParsing: Bool? = nil
-    @State private var aiFallbackReason: String? = nil
 
     @State private var showToast: Bool = false
     @State private var toastMessage: String? = nil
@@ -64,9 +62,8 @@ struct ParkingSpotDetailView: View {
     @State private var parking = SpotParkingModel()
 
     // Auto-created or matched spot to edit after scan
-    @State private var newSpotForEdit: ParkingSpot? = nil
     // Use this to attach analysis results to the correct spot if we merged/created by address
-    @State private var analysisSpotOverride: ParkingSpot? = nil
+    @State private var analysisScan: SignScan? = nil
 
 
     private var currentUserID: UUID? {
@@ -104,8 +101,6 @@ struct ParkingSpotDetailView: View {
             SpotScanStatusSections(
                 isAnalyzing: isAnalyzing,
                 ocrText: ocrText,
-                usedAIParsing: usedAIParsing,
-                aiFallbackReason: aiFallbackReason,
                 scanError: scanError
             )
         }
@@ -153,8 +148,7 @@ struct ParkingSpotDetailView: View {
                 if let text = spot.lastScanText, !text.isEmpty {
                     Button {
                         Task { @MainActor in
-                            self.usedAIParsing = nil
-                            self.aiFallbackReason = nil
+                            self.analysisScan = lastScan
                             self.ocrText = text
                             self.isAnalyzing = true
                             defer { self.isAnalyzing = false }
@@ -231,22 +225,20 @@ struct ParkingSpotDetailView: View {
                 isAnalyzing = false
             }
         }
-        .sheet(isPresented: $showQuickReview) {
+        .sheet(isPresented: $showQuickReview, onDismiss: {
+            if analysis != nil && !showCamera { showAnalysisSheet = true }
+        }) {
             if let img = pendingQuickImage {
                 QuickScanReviewView(
                     image: img,
                     ocrPreview: pendingQuickOCRText,
                     onSubmit: { mergedText, filenames in
                         Task { @MainActor in
-                            // Resolve coordinate and reverse geocode to an address label
-                            let coord = locationManager.lastLocation?.coordinate ?? spotCoordinate
-                            let address = await reverseGeocode(coord)
-
-                            // Find or create a ParkingSpot by normalized address (main actor)
-                            let preferredSide = spot.streetSide
-                            let targetSpot: ParkingSpot
-                            do { targetSpot = try SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide) }
-                            catch { AppIssueStore.shared.message = "Couldn’t save the spot: \(error.localizedDescription)"; return }
+                            // A scan opened from a saved spot belongs to that spot,
+                            // even when the device has moved elsewhere.
+                            let coord = spotCoordinate
+                            let address = spot.location
+                            let targetSpot = spot
 
                             // Insert SignScan attached to the targetSpot
                             await MainActor.run {
@@ -270,6 +262,8 @@ struct ParkingSpotDetailView: View {
                                 )
                                 context.insert(scan)
                                 targetSpot.attach(scan: scan)
+                                analysisScan = scan
+                                photoFilename = filenames.first
 
                                 // Assign to a curb segment (nearest on same side or create new)
                                 let allScans = (try? context.fetch(FetchDescriptor<SignScan>())) ?? []
@@ -289,8 +283,6 @@ struct ParkingSpotDetailView: View {
 
                             // Track the correct spot for analysis result attachment and offer editing
                             await MainActor.run {
-                                analysisSpotOverride = targetSpot
-                                newSpotForEdit = targetSpot
                                 self.ocrText = mergedText
                             }
 
@@ -323,32 +315,19 @@ struct ParkingSpotDetailView: View {
         }
         .sheet(isPresented: $showAnalysisSheet) {
             if let analysis, let userID = currentUserID ?? Optional(UUID()) {
-                VStack(spacing: 0) {
-                    let status = ParkingSignalEvaluator.status(for: analysis, now: Date(), leadMinutes: leadMinutes)
-                    HStack(spacing: 10) {
-                        Image(systemName: status.iconName).foregroundStyle(status.color)
-                            .accessibilityHidden(true)
-                        Text(status.label).font(.subheadline)
-                        Spacer()
-                    }
-                    .padding(8)
-                    .background(status.color.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding([.horizontal, .top])
                     AnalysisConfirmationView(
-                        spot: analysisSpotOverride ?? spot,
+                        spot: spot,
                         sourceUser: userID,
                         ocrText: ocrText,
                         photoFilename: photoFilename,
                         analysis: analysis,
-                        scan: (analysisSpotOverride ?? spot).signScansList.sorted { $0.createdAt > $1.createdAt }.first,
+                        scan: analysisScan ?? lastScan,
                         onFinished: { _ in
                             onUpdate?(spot)
-                            analysisSpotOverride = nil
+                            analysisScan = nil
                         }
                     )
                     .environment(\.modelContext, context)
-                }
             }
         }
         .sheet(item: $segmentEditScan) { scan in
@@ -405,10 +384,7 @@ struct ParkingSpotDetailView: View {
                     }
             }
         }
-        .sheet(item: $newSpotForEdit) { s in
-            SpotEditView(spot: s)
-                .environment(\.modelContext, context)
-        }
+
         .onAppear {
             if let current = spot.parkSessionsList.first(where: { $0.endedAt == nil && $0.car != nil })?.car?.id {
                 parking.selectedCarID = current
@@ -576,6 +552,8 @@ struct ParkingSpotDetailView: View {
                 VStack(alignment: .leading) {
                     Text(restriction.type.displayName)
                         .font(.headline)
+                    if restriction.needsReview { Label("Review required", systemImage: "exclamationmark.triangle") }
+                    if let minutes = restriction.durationMinutes { Text("Maximum stay: \(minutes) minutes").font(.subheadline) }
                     Text(restriction.timeDescription)
                     Text(restriction.daysDescription)
                         .font(.caption)
@@ -623,10 +601,8 @@ struct ParkingSpotDetailView: View {
         isAnalyzing = true
         defer { isAnalyzing = false }
         // v1 interprets signs on-device (no cloud AI).
-        usedAIParsing = false
-        aiFallbackReason = nil
         analysis = localParser.analyze(ocrText: text)
-        if analysis != nil {
+        if analysis != nil && !showQuickReview {
             showAnalysisSheet = true
         }
     }

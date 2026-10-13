@@ -32,6 +32,7 @@ struct QuickScanReviewView: View {
                         if let last = images.last {
                             Image(uiImage: last)
                                 .resizable()
+                                .accessibilityLabel("Selected sign photo")
                                 .scaledToFit()
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .padding(.horizontal)
@@ -76,24 +77,27 @@ struct QuickScanReviewView: View {
                     }
                 }
 
-                HStack(spacing: 12) {
-                    Button(role: .destructive) { onDelete() } label: {
-                        Label("Delete", systemImage: "trash")
+                VStack(spacing: 10) {
+                    Menu {
+                        Button("Retake Photo", systemImage: "arrow.uturn.left", action: onRetake)
+                        Button("Add Another Photo", systemImage: "plus.circle") { showingCamera = true }
+                        Button("Discard Photos", systemImage: "trash", role: .destructive, action: onDelete)
+                    } label: {
+                        Label("Photo Options", systemImage: "ellipsis.circle")
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    Button { onRetake() } label: {
-                        Label("Retake Photo", systemImage: "arrow.uturn.left")
-                    }
-                    Button { showingCamera = true } label: {
-                        Label("Add Another Photo", systemImage: "plus.circle")
-                    }
-                    Spacer()
+                    .buttonStyle(.bordered)
                     Button {
                         Task { await submit() }
                     } label: {
-                        Label("Submit Scan", systemImage: "paperplane")
+                        Label("Review Rules", systemImage: "checklist")
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(working)
+                    .disabled(working || mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("No sign text was found. Retake a clearer photo or enter a rule manually from the spot.").font(.footnote)
+                    }
                 }
                 .padding()
             }

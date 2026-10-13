@@ -34,7 +34,7 @@ struct SpotsMapView: View {
     @State private var confirmCar: Car? = nil
 
     @State private var isShowingFilters: Bool = false
-    @State private var showOnlyAllowedNow: Bool = false
+    @State private var showOnlyInactiveRules: Bool = false
     @State private var showSoonRestrictions: Bool = true
     @State private var showParkedSpots: Bool = true
     
@@ -213,11 +213,10 @@ struct SpotsMapView: View {
             .sheet(isPresented: $isShowingFilters) {
                 NavigationStack {
                     Form {
-                        Toggle("Only Allowed Now", isOn: $showOnlyAllowedNow)
+                        Toggle("Only Reviewed, Inactive Rules", isOn: $showOnlyInactiveRules)
                         Toggle("Show Soon Restrictions", isOn: $showSoonRestrictions)
                         Toggle("Show Parked Spots", isOn: $showParkedSpots)
                         Toggle("Availability Overlays", isOn: $mapShowAvailabilityOverlay)
-                        Toggle("City Zone Overlays", isOn: $mapShowCityZoneOverlay)
                         Toggle("Legend", isOn: $mapShowLegend)
                     }
                     .navigationTitle("Filters")
@@ -304,19 +303,10 @@ struct SpotsMapView: View {
         showEligibilityConfirm = false
     }
 
-    private func isRestrictedNow(_ spot: ParkingSpot, now: Date = Date()) -> Bool {
-        // Delegate to the shared, overnight-correct model helper.
-        spot.isRestrictedNow(at: now)
-    }
-
-    private func nextRestrictionDate(for spot: ParkingSpot, from now: Date = Date()) -> Date? {
-        return spot.nextRestrictionDate(from: now)
-    }
-    
     private func filteredSpots() -> [ParkingSpot] {
         var results = spots
-        if showOnlyAllowedNow {
-            results = results.filter { !isRestrictedNow($0) }
+        if showOnlyInactiveRules {
+            results = results.filter { ParkingSignalEvaluator.status(for: $0) == .green }
         }
         if !showSoonRestrictions {
             results = results.filter { $0.nextRestrictionDate()?.timeIntervalSinceNow ?? .infinity > 2 * 60 * 60 }

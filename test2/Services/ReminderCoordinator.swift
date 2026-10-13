@@ -11,14 +11,23 @@ struct PlannedReminder: Codable, Equatable, Identifiable {
     let deadline: Date
     let title: String
     let body: String
-    var fingerprint: String { "\(id)|\(fireDate.timeIntervalSince1970)|\(deadline.timeIntervalSince1970)|\(title)|\(body)" }
+    var fingerprint: String { "\(id)|\(carID?.uuidString ?? "")|\(spotID.uuidString)|\(fireDate.timeIntervalSince1970)|\(deadline.timeIntervalSince1970)|\(title)|\(body)" }
 }
 
 /// Saved rules produce a rolling fourteen-day schedule on this device. Opening
 /// the app extends the horizon; individual fired/cancelled occurrences stay retired.
 enum ReminderPlanner {
     static func plan(sessions: [ParkSession], leadMinutes: Int, now: Date, calendar: Calendar = .current) -> [PlannedReminder] {
-        sessions.filter { $0.endedAt == nil }.flatMap { session -> [PlannedReminder] in
+        // Concurrent offline edits can temporarily sync two open sessions for a
+        // car. Select the newest deterministically, without mutating cloud data.
+        var newest: [String: ParkSession] = [:]
+        for session in sessions.filter({ $0.endedAt == nil }).sorted(by: {
+            $0.startedAt == $1.startedAt ? $0.id.uuidString > $1.id.uuidString : $0.startedAt > $1.startedAt
+        }) {
+            let key = session.car?.id.uuidString ?? "carless"
+            if newest[key] == nil { newest[key] = session }
+        }
+        return newest.values.flatMap { session -> [PlannedReminder] in
             guard let spot = session.spot, !spot.signScansList.contains(where: \.needsReview),
                   !spot.restrictionsList.contains(where: { $0.needsReview || $0.type == .other }) else { return [] }
             var cal = calendar
@@ -27,6 +36,17 @@ enum ReminderPlanner {
             let horizon = cal.date(byAdding: .day, value: 14, to: today) ?? now
             var deadlines = Set<Date>()
             for rule in spot.restrictionsList {
+                let allDay = cal.component(.hour, from: rule.startTime) == cal.component(.hour, from: rule.endTime)
+                    && cal.component(.minute, from: rule.startTime) == cal.component(.minute, from: rule.endTime)
+                if allDay, rule.daysOfWeek.isEmpty || Set(rule.daysOfWeek).count == 7,
+                   let duration = rule.durationMinutes, duration > 0,
+                   rule.type != .noParking && rule.type != .streetCleaning {
+                    // An unrestricted daily window does not reset a stay limit at
+                    // midnight, including limits longer than one calendar day.
+                    let deadline = session.startedAt.addingTimeInterval(Double(duration) * 60)
+                    if deadline > now && deadline < horizon { deadlines.insert(deadline) }
+                    continue
+                }
                 for offset in -1..<14 {
                     guard let day = cal.date(byAdding: .day, value: offset, to: today),
                           rule.daysOfWeek.isEmpty || rule.daysOfWeek.contains(cal.component(.weekday, from: day) - 1),
@@ -63,14 +83,14 @@ struct ReminderHandle: Codable, Equatable {
 
 @MainActor
 protocol ReminderBackend {
-    func pendingKeys() async -> Set<String>
+    func pendingKeys() async throws -> Set<String>
     func schedule(_ plan: PlannedReminder) async throws -> ReminderHandle
-    func cancel(_ handle: ReminderHandle) async
+    func cancel(_ handle: ReminderHandle) async throws
 }
 
 struct DeviceReminderBackend: ReminderBackend {
-    func pendingKeys() async -> Set<String> {
-        Set(await AlarmService.shared.allAlarms().map {
+    func pendingKeys() async throws -> Set<String> {
+        Set(try await AlarmService.shared.checkedAlarms().map {
             $0.source == .alarmKit ? "alarm:\($0.id)" : "notification:\($0.notificationIdentifier ?? "")"
         })
     }
@@ -98,8 +118,8 @@ struct DeviceReminderBackend: ReminderBackend {
             categoryIdentifier: nil, scheduledFor: plan.fireDate, userInfo: nil)
         return ReminderHandle(notificationID: plan.id)
     }
-    func cancel(_ handle: ReminderHandle) async {
-        if let id = handle.alarmID { await AlarmService.shared.cancel(id: id) }
+    func cancel(_ handle: ReminderHandle) async throws {
+        if let id = handle.alarmID { try await AlarmService.shared.cancelChecked(id: id) }
         if let id = handle.notificationID { await AlarmService.shared.cancelNotification(identifier: id) }
     }
 }
@@ -146,11 +166,11 @@ final class ReminderCoordinator: ObservableObject {
                     // Retire old repeating reminders/countdowns once, including
                     // those created before the app tracked session ownership.
                     let known = Set(records.values.compactMap { $0.handle?.key })
-                    for alarm in await AlarmService.shared.allAlarms() {
+                    for alarm in try await AlarmService.shared.checkedAlarms() {
                         let key = alarm.source == .alarmKit ? "alarm:\(alarm.id)" : "notification:\(alarm.notificationIdentifier ?? "")"
                         let oldID = alarm.notificationIdentifier ?? ""
                         if !known.contains(key) && (alarm.carID != nil || alarm.spotID != nil || oldID.hasPrefix("restriction.") || oldID.hasPrefix("nextRestriction.")) {
-                            await backend.cancel(ReminderHandle(alarmID: alarm.source == .alarmKit ? alarm.id : nil, notificationID: alarm.notificationIdentifier))
+                            try await backend.cancel(ReminderHandle(alarmID: alarm.source == .alarmKit ? alarm.id : nil, notificationID: alarm.notificationIdentifier))
                         }
                     }
                     defaults.set(true, forKey: "parking.v1.remindersMigrated")
@@ -166,17 +186,19 @@ final class ReminderCoordinator: ObservableObject {
     /// persists until the rule/session/lead time changes its fingerprint.
     func apply(_ plans: [PlannedReminder], now: Date = Date()) async throws {
         var saved = records
+        defer { records = saved }
         let desired = Dictionary(plans.prefix(48).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let pending = await backend.pendingKeys()
+        let pending = try await backend.pendingKeys()
         for (id, record) in saved where desired[id]?.fingerprint != record.plan.fingerprint {
-            if let handle = record.handle { await backend.cancel(handle) }
+            if let handle = record.handle { try await backend.cancel(handle) }
             saved.removeValue(forKey: id)
         }
-        // Persist successful work even when scheduling one item fails.
-        defer { records = saved }
         for (id, plan) in desired {
             if let current = saved[id] {
-                if current.suppressed { continue }
+                if current.suppressed {
+                    if let handle = current.handle, pending.contains(handle.key) { try await backend.cancel(handle) }
+                    continue
+                }
                 if let handle = current.handle {
                     if pending.contains(handle.key) { continue }
                     if current.plan.fireDate <= now { continue } // Already fired or dismissed outside the app.
@@ -194,11 +216,23 @@ final class ReminderCoordinator: ObservableObject {
         }
         records = saved
     }
-    func resumeCancelled(context: ModelContext) async {
-        var saved = records
-        for id in saved.keys where saved[id]?.suppressed == true { saved.removeValue(forKey: id) }
-        records = saved
+    func resumeCancelled(context: ModelContext, carID: UUID? = nil) async {
+        do { try await restoreCancelled(carID: carID) }
+        catch {
+            statusMessage = "A previous reminder could not be cleared. Try restoring again."
+            return
+        }
         await reconcile(context: context)
+    }
+    func restoreCancelled(carID: UUID? = nil) async throws {
+        var saved = records
+        defer { records = saved }
+        for id in saved.keys where saved[id]?.suppressed == true && (carID == nil || saved[id]?.plan.carID == carID) {
+            // Keep ownership until the OS confirms cancellation, even if a
+            // previous cancel failed. Otherwise restoring could duplicate an alarm.
+            if let handle = saved[id]?.handle { try await backend.cancel(handle) }
+            saved.removeValue(forKey: id)
+        }
     }
     func suppressAll() {
         var saved = records
@@ -207,10 +241,11 @@ final class ReminderCoordinator: ObservableObject {
     }
     func cancel(carID: UUID) async {
         var saved = records
+        defer { records = saved }
         for id in saved.keys where saved[id]?.plan.carID == carID {
-            if let handle = saved[id]?.handle { await backend.cancel(handle) }
             saved[id]?.suppressed = true
+            do { if let handle = saved[id]?.handle { try await backend.cancel(handle) } }
+            catch { statusMessage = "A reminder could not be cancelled. Reopen Alerts and try again." }
         }
-        records = saved
     }
 }

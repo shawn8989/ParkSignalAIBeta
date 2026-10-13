@@ -30,7 +30,10 @@ final class AlarmService: ObservableObject {
         UserDefaults.standard.set(value, forKey: authCacheKey)
     }
     func isAuthorizedCached() -> Bool {
-        return UserDefaults.standard.bool(forKey: authCacheKey)
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) { return AlarmManager.shared.authorizationState == .authorized }
+        #endif
+        return false
     }
 
     private let metadataKey = "AlarmService.Metadata"
@@ -181,11 +184,16 @@ final class AlarmService: ObservableObject {
     // MARK: - Query
 
     func allAlarms() async -> [SimpleAlarm] {
+        do { return try await checkedAlarms() }
+        catch { AppIssueStore.shared.message = "Couldn’t read active alarms: \(error.localizedDescription)"; return [] }
+    }
+
+    func checkedAlarms() async throws -> [SimpleAlarm] {
         var results: [SimpleAlarm] = []
 
         // AlarmKit alarms
         #if canImport(AlarmKit)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), AlarmManager.shared.authorizationState == .authorized {
             do {
                 let alarms = try AlarmManager.shared.alarms
                 let mapped: [SimpleAlarm] = alarms.map { alarm in
@@ -204,7 +212,7 @@ final class AlarmService: ObservableObject {
                     )
                 }
                 results.append(contentsOf: mapped)
-            } catch { }
+            } catch { throw error }
         }
         #endif
 
@@ -256,12 +264,16 @@ final class AlarmService: ObservableObject {
     /// Cancel a scheduled alarm by its identifier.
     /// - Parameter id: The UUID of the alarm to cancel.
     func cancel(id: UUID) async {
+        do { try await cancelChecked(id: id) }
+        catch { AppIssueStore.shared.message = "Couldn’t cancel the alarm: \(error.localizedDescription)" }
+    }
+
+    func cancelChecked(id: UUID) async throws {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
-            do {
-                try AlarmManager.shared.cancel(id: id)
-                self.objectWillChange.send()
-            } catch { }
+            guard try AlarmManager.shared.alarms.contains(where: { $0.id == id }) else { return }
+            try AlarmManager.shared.cancel(id: id)
+            self.objectWillChange.send()
         }
         #endif
     }
@@ -297,7 +309,7 @@ final class AlarmService: ObservableObject {
                 }
                 self.objectWillChange.send()
             } catch {
-                // ignore failures
+                AppIssueStore.shared.message = "Some alarms could not be cancelled: \(error.localizedDescription)"
             }
         }
         #endif

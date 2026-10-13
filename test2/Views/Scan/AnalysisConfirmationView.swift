@@ -24,7 +24,7 @@ struct AnalysisConfirmationView: View {
         var include = true
         var draft: ReviewedRestriction
     }
-    private var unresolved: Bool { items.contains { $0.include && ($0.draft.needsReview || $0.draft.type == .other) } }
+    private var unresolved: Bool { analysis.restrictions.contains(where: \.requiresReview) || items.contains { $0.include && ($0.draft.needsReview || $0.draft.type == .other) } }
     private var spotCalendar: Calendar {
         var calendar = Calendar.current
         calendar.timeZone = TimeZone(identifier: spot.timeZoneIdentifier) ?? .current
@@ -55,6 +55,12 @@ struct AnalysisConfirmationView: View {
                             DatePicker("From", selection: $item.draft.start, displayedComponents: .hourAndMinute)
                             DatePicker("Until", selection: $item.draft.end, displayedComponents: .hourAndMinute)
                             Text("Matching start and end times mean all day.").font(.footnote)
+                            if let minutes = item.draft.durationMinutes {
+                                Stepper("Maximum stay: \(minutes) minutes", value: Binding(
+                                    get: { item.draft.durationMinutes ?? 1 },
+                                    set: { item.draft.durationMinutes = $0 }), in: 1...10080)
+                                Text("The limit applies within the selected days and hours; it is separate from those hours.").font(.footnote)
+                            }
                             ForEach(0..<7, id: \.self) { day in
                                 Toggle(Calendar.current.weekdaySymbols[day], isOn: Binding(
                                     get: { item.draft.days.contains(day) },
@@ -62,12 +68,6 @@ struct AnalysisConfirmationView: View {
                                         if on { if !item.draft.days.contains(day) { item.draft.days.append(day) } }
                                         else { item.draft.days.removeAll { $0 == day } }
                                     }))
-                            }
-                            if let minutes = item.draft.durationMinutes {
-                                Stepper("Maximum stay: \(minutes) minutes", value: Binding(
-                                    get: { item.draft.durationMinutes ?? 1 },
-                                    set: { item.draft.durationMinutes = $0 }), in: 1...1440)
-                                Text("The limit applies within the selected days and hours; it is separate from those hours.").font(.footnote)
                             }
                             ForEach(item.draft.reviewReasons, id: \.self) { Text($0).font(.footnote) }
                         }
@@ -121,7 +121,8 @@ struct AnalysisConfirmationView: View {
         let oldIDs = scan?.restrictionsList.map(\.id) ?? []
         do {
             let created = try ScanReviewService(context: context).save(items.filter(\.include).map(\.draft),
-                for: spot, scan: scan, text: ocrText, photoFilename: photoFilename, sourceUser: sourceUser)
+                for: spot, scan: scan, text: ocrText, photoFilename: photoFilename, sourceUser: sourceUser,
+                sourceRequiresReview: analysis.restrictions.contains(where: \.requiresReview))
             await NotificationManager.shared.cancel(forRestrictionIDs: oldIDs)
             if parkedHere && !unresolved {
                 if await ParkingSessionService(context: context).park(cars.count == 1 ? cars.first : nil, at: spot) {

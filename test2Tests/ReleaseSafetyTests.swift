@@ -92,5 +92,11 @@ struct ReleaseSafetyTests {
         #expect(scan.restrictionsList.count == 1)
         #expect(scan.restrictionsList.first?.durationMinutes == 120)
         #expect(spot.restrictionsList.contains { $0.id == other.id })
+        // Excluding one proposal cannot silently discard an unsupported condition
+        // present in the original sign text.
+        _ = try service.save([draft], for: spot, scan: scan, text: "2 HR EXCEPT HOLIDAYS", photoFilename: nil, sourceUser: UUID(), sourceRequiresReview: true)
+        #expect(scan.needsReview)
+        #expect(scan.restrictionsList.allSatisfy { $0.needsReview })
+        #expect(ParkingSignalEvaluator.status(for: spot) == .gray)
     }
 }

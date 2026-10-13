@@ -8,7 +8,7 @@ older “code ready” claims and the 24/42 corpus baseline.
 
 Branch `codex/free-v1-release` combines #23 (photo sync), #24 (alarm cleanup) and
 #25 (session service/refactor/corpus). Original merge commit: `927aea5`. The combined
-behavior/schema changes are offered in a review PR, not automatically merged.
+behavior/schema changes are offered in [PR #26](https://github.com/shawn8989/ParkSignalAIBeta/pull/26), not automatically merged.
 
 - Local-only sign interpretation; the direct OpenAI service is removed. Branding
   remains intact. No payment or advertising SDK was added.
@@ -24,6 +24,9 @@ behavior/schema changes are offered in a review PR, not automatically merged.
 - One device-local reminder coordinator reconciles edits, deletions, re-analysis,
   relaunch, synced saves and lead-time changes. Device opt-in is local. Cancelled
   and delivered occurrences are not recreated; explicit restore is available.
+  Failed cancellations retain ownership for retry, including when restoring a
+  cancelled reminder. Concurrent synced sessions select the newest per car.
+  All-day duration limits do not reset at midnight.
   Reminders cover the next 14 days, capped at 48 upcoming events. Permission errors
   are visible; enabling within the lead window still schedules promptly.
 - Every persisted relationship is optional, preserving original field names.
@@ -35,11 +38,16 @@ behavior/schema changes are offered in a review PR, not automatically merged.
   keeps the CloudKit configuration. A signed simulator can explicitly opt in.
 - Save errors are surfaced, advanced geometry is collapsed, key confirmation/day
   controls have accessible labels, and times are reviewed in the spot's saved zone.
+  A scan from a saved spot stays attached to that spot. Unchecking an unsupported
+  proposal cannot silently clear its source sign's unresolved conditions.
+- Large accessibility text uses a compact map with a separate scrollable legend,
+  stacked spot-row actions and wrapping labels. Gray status badges use primary
+  text for contrast. The map filter excludes unresolved spots.
 
 ## Verified locally
 
 - Xcode 26.6; iOS 18.6 iPhone 16 Pro simulator.
-- Debug unit suite: **116 tests passed**, 0 failed/skipped (125 parameterized executions).
+- Debug unit suite: **120 tests passed**, 0 failed/skipped (131 parameterized executions).
 - The 42-case corpus: **30 correctly interpreted supported patterns + 12 explicitly
   unresolved patterns**. No known-failure exemptions. This is not a claim of 100%
   real-world sign or photographic OCR accuracy.
@@ -61,11 +69,28 @@ Source copies: `docs/legal/`. Policy describes private CloudKit records/photos,
 Apple Maps/address lookup, local interpretation and device-specific reminders.
 The support channel is public GitHub issues; do not post private parking details.
 
-## Validation still in progress
+## CI and visual verification
 
-- Integrated PR CI: awaiting the first pushed integration commit.
-- Clean Release screenshots and large-text visual pass: in progress in an isolated
-  iPhone 16 Pro Max simulator. Historical screenshots are not approved release assets.
+[PR #26 checks](https://github.com/shawn8989/ParkSignalAIBeta/pull/26/checks) run the
+unit suite and both build configurations on the integrated branch. The first
+combined code commit `1701654` passed [CI run 38340050512](https://github.com/shawn8989/ParkSignalAIBeta/actions/runs/38340050512).
+The follow-up adds cancellation retry/restore, duplicate-session and multi-day-limit
+coverage plus scan and accessibility refinements. Verify the latest PR commit's
+check before merging; an earlier green run does not certify a later change.
+
+Native Release screenshots and the capture manifest are under `screenshots/`.
+The saved-spot/draft-scan data survived relaunch. A synthetic sign image was selected
+through the photo picker and recognized by Vision; the review displayed its two-hour
+rule and 09:00–18:00 window. This is a controlled OCR smoke check, not field accuracy.
+The end-to-end confirmation/save and subsequent reminder UI still need a complete pass.
+
+The largest accessibility text setting exposed legend overlap, which was corrected.
+Dashboard default-text and large-text/dark-mode captures are recorded. Full VoiceOver,
+remaining screen layouts and the final Map/review/alarms marketing captures remain
+**incomplete**: Simulator control repeatedly returned `noWindowsAvailable` even while
+native screenshot capture worked. No Apple-account step is needed to finish these
+checks; resume when simulator UI control is available. Historical DEBUG screenshots
+must not be uploaded. See `screenshots/MANIFEST.md` for exact capture status.
 
 ## Owner release gates
 

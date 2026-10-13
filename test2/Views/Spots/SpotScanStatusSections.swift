@@ -4,8 +4,6 @@ import SwiftUI
 struct SpotScanStatusSections: View {
     let isAnalyzing: Bool
     let ocrText: String
-    let usedAIParsing: Bool?
-    let aiFallbackReason: String?
     let scanError: String?
 
     var body: some View {
@@ -14,9 +12,6 @@ struct SpotScanStatusSections: View {
         }
         if !ocrText.isEmpty {
             lastOCRSection()
-        }
-        if usedAIParsing != nil {
-            parsingInfoSection()
         }
         if scanError != nil {
             scanErrorSection()
@@ -39,25 +34,6 @@ struct SpotScanStatusSections: View {
             Text(ocrText)
                 .textSelection(.enabled)
                 .font(.body.monospaced())
-        }
-    }
-
-    @ViewBuilder
-    private func parsingInfoSection() -> some View {
-        Section {
-            HStack {
-                Image(systemName: (usedAIParsing ?? false) ? "bolt.horizontal.circle" : "cpu")
-                Text((usedAIParsing ?? false) ? "Parsed using AI" : "Parsed locally")
-                    .font(.subheadline)
-                Spacer()
-                if let reason = aiFallbackReason, usedAIParsing == false {
-                    Text(reason)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
         }
     }
 

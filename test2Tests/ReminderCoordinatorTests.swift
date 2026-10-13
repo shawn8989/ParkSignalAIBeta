@@ -9,6 +9,7 @@ final class FakeReminderBackend: ReminderBackend {
     var scheduled: [PlannedReminder] = []
     var cancelled: [ReminderHandle] = []
     var deny = false
+    var denyCancellation = false
     func pendingKeys() async -> Set<String> { pending }
     func schedule(_ plan: PlannedReminder) async throws -> ReminderHandle {
         if deny { throw AlarmService.AlarmError.notAuthorized }
@@ -17,7 +18,8 @@ final class FakeReminderBackend: ReminderBackend {
         pending.insert(handle.key)
         return handle
     }
-    func cancel(_ handle: ReminderHandle) async {
+    func cancel(_ handle: ReminderHandle) async throws {
+        if denyCancellation { throw AlarmService.AlarmError.notAuthorized }
         cancelled.append(handle)
         pending.remove(handle.key)
     }
@@ -80,6 +82,41 @@ struct ReminderCoordinatorTests {
         try await coordinator.apply([a])
         #expect(backend.scheduled.count == 1)
     }
+    @Test func failedCancellationRetainsOwnershipForRetry() async throws {
+        let name = "ReminderTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let backend = FakeReminderBackend(), a = plan()
+        let coordinator = ReminderCoordinator(defaults: defaults, backend: backend)
+        try await coordinator.apply([a])
+        backend.denyCancellation = true
+        do { try await coordinator.apply([]); Issue.record("Expected cancellation failure") } catch {}
+        #expect(backend.pending.count == 1)
+        backend.denyCancellation = false
+        try await ReminderCoordinator(defaults: defaults, backend: backend).apply([])
+        #expect(backend.pending.isEmpty)
+        #expect(backend.cancelled.count == 1)
+    }
+
+    @Test func restoreAfterFailedCancelNeverLosesOrDuplicatesAnAlarm() async throws {
+        let name = "ReminderTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let backend = FakeReminderBackend(), a = plan(), b = plan(id: "B")
+        let coordinator = ReminderCoordinator(defaults: defaults, backend: backend)
+        try await coordinator.apply([a,b])
+        coordinator.suppressAll()
+        backend.denyCancellation = true
+        do { try await coordinator.restoreCancelled(carID: a.carID); Issue.record("Expected cancellation failure") } catch {}
+        #expect(backend.pending.count == 2)
+        #expect(backend.scheduled.count == 2)
+        backend.denyCancellation = false
+        try await coordinator.restoreCancelled(carID: a.carID)
+        try await coordinator.apply([a,b])
+        #expect(backend.pending == ["notification:\(a.id)"])
+        #expect(backend.scheduled.count == 3) // Only the explicitly restored car.
+    }
+
     @Test func deliveredOccurrenceIsNotReplayed() async throws {
         let name = "ReminderTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -114,6 +151,40 @@ struct ReminderCoordinatorTests {
         rule.needsReview = true
         #expect(ReminderPlanner.plan(sessions: [session], leadMinutes: 15, now: now, calendar: cal).isEmpty)
     }
+    @Test(arguments: [120, 1440, 4320])
+    func allDayDurationDoesNotResetAtMidnight(_ minutes: Int) throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let now = try #require(cal.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 23)))
+        let spot = ParkingSpot(location: "Test", latitude: 1, longitude: 2, streetSide: "right")
+        spot.timeZoneIdentifier = cal.timeZone.identifier
+        let midnight = cal.startOfDay(for: now)
+        spot.restrictionsList = [Restriction(type: .timeLimited, startTime: midnight, endTime: midnight,
+            daysOfWeek: Array(0...6), sourceUser: UUID(), durationMinutes: minutes)]
+        let plans = ReminderPlanner.plan(sessions: [ParkSession(spot: spot, startedAt: now)], leadMinutes: 15, now: now, calendar: cal)
+        #expect(plans.count == 1)
+        #expect(plans.first?.deadline == now.addingTimeInterval(Double(minutes) * 60))
+    }
+
+    @Test func syncedDuplicateSessionsUseNewestPerCar() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let now = try #require(cal.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 9)))
+        let spot = ParkingSpot(location: "Test", latitude: 1, longitude: 2, streetSide: "right")
+        spot.timeZoneIdentifier = cal.timeZone.identifier
+        spot.restrictionsList = [Restriction(type: .noParking,
+            startTime: DateTimeUtils.todayAt(hour: 12, minute: 0, ref: now, calendar: cal),
+            endTime: DateTimeUtils.todayAt(hour: 14, minute: 0, ref: now, calendar: cal),
+            daysOfWeek: [1], sourceUser: UUID())]
+        let car = Car(nickname: "One")
+        let old = ParkSession(spot: spot, startedAt: now.addingTimeInterval(-60), car: car)
+        let current = ParkSession(spot: spot, startedAt: now, car: car)
+        let otherCar = ParkSession(spot: spot, startedAt: now, car: Car(nickname: "Two"))
+        let plans = ReminderPlanner.plan(sessions: [old,current,otherCar], leadMinutes: 15, now: now, calendar: cal)
+        #expect(plans.count == 4) // Two Mondays, two cars; no double booking for One.
+        #expect(!plans.contains { $0.id.contains(old.id.uuidString) })
+    }
+
     @Test func overnightAcrossDSTUsesCalendarDays() throws {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
         let spring = try #require(ISO8601DateFormatter().date(from: "2026-03-08T10:30:00Z")) // Sunday 03:30 after jump

@@ -133,7 +133,7 @@ final class ParkingSpot {
             self.streetPhotoFilenames.append(filename)
         }
     }
-    
+
     var isCurrentlyParked: Bool { isCurrentlyParked(for: nil) }
 
     func isCurrentlyParked(for car: Car?) -> Bool {
@@ -154,7 +154,7 @@ final class Restriction {
     var startTime: Date = Date.now
     var endTime: Date = Date.now
     var daysMask: Int = 0 // bitmask for days: Sunday bit0 ... Saturday bit6
-    
+
     // Computed accessor for days of week as indices (0 = Sun ... 6 = Sat)
     var daysOfWeek: [Int] {
         get {
@@ -196,7 +196,7 @@ final class Restriction {
         self.spot = spot
         self.scan = scan
     }
-    
+
     var timeDescription: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -204,7 +204,7 @@ final class Restriction {
         let end = formatter.string(from: endTime)
         return "\(start) - \(end)"
     }
-    
+
     var daysDescription: String {
         // Sunday = 0 through Saturday = 6
         let daySymbols = Calendar.current.shortWeekdaySymbols
@@ -224,7 +224,7 @@ final class ParkSession {
     @Relationship var car: Car?
     var startedAt: Date = Date.now
     var endedAt: Date?
-    
+
     var isActive: Bool { endedAt == nil }
 
     init(id: UUID = UUID(), spot: ParkingSpot? = nil, startedAt: Date = Date.now, endedAt: Date? = nil, car: Car? = nil) {

@@ -154,7 +154,8 @@ final class ParkingSpot {
     }
 
     func updateLastScan(from scan: SignScan) {
-        self.lastScanText = scan.aiAnalysisText ?? scan.localAnalysisText ?? scan.ocrText
+        let merged = scan.mergedOCRText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.lastScanText = !merged.isEmpty ? merged : scan.ocrText
         self.lastScanPhotoFilename = scan.photoFilenames.first ?? scan.photoFilename ?? scan.additionalPhotoFilenames.first
         self.lastScanAt = scan.analyzedAt ?? scan.createdAt
     }
@@ -240,6 +241,7 @@ final class Restriction {
     var timeDescription: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        if let zone = spot.flatMap({ TimeZone(identifier: $0.timeZoneIdentifier) }) { formatter.timeZone = zone }
         let start = formatter.string(from: startTime)
         let end = formatter.string(from: endTime)
         return "\(start) - \(end)"

@@ -72,7 +72,6 @@ struct QuickScanSheet: View {
                     }
                     ButtonsRow(
                         recognizedText: $recognizedText,
-                        onAnalyze: { Task { await analyzeRecognizedText() } },
                         onClear: { recognizedText = "" }
                     )
                     .padding(.horizontal)
@@ -177,7 +176,7 @@ struct QuickScanSheet: View {
                                 // and alarms scheduled only after the user confirms.
                                 await MainActor.run {
                                     recognizedText = mergedText
-                                    let status = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
+                                    let status = ParkingSignalStatus.gray
                                     signalStatus = status
                                     scan.signalState = status.rawValue
                                     scan.status = "needsReview"
@@ -242,10 +241,6 @@ struct QuickScanSheet: View {
         }
     }
 
-    private func normalized(_ s: String?) -> String {
-        return (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
     private func processImage() async {
         guard let image = capturedImage else { return }
         isAnalyzing = true
@@ -259,22 +254,11 @@ struct QuickScanSheet: View {
         }
     }
 
-    @MainActor
-    private func analyzeRecognizedText() async {
-        guard !recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        isAnalyzing = true
-        errorMessage = nil
-        defer { isAnalyzing = false }
-
-        let parsed = localParser.analyze(ocrText: recognizedText)
-        signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
-    }
 
 }
 
 private struct ButtonsRow: View {
     @Binding var recognizedText: String
-    var onAnalyze: () -> Void
     var onClear: () -> Void
 
     var body: some View {
@@ -287,9 +271,6 @@ private struct ButtonsRow: View {
             .buttonStyle(.bordered)
 
             Spacer()
-
-            Button("Analyze", action: onAnalyze)
-                .buttonStyle(.borderedProminent)
 
             Button("Clear", action: onClear)
                 .buttonStyle(.bordered)

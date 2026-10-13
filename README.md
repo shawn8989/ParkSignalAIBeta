@@ -56,3 +56,7 @@ Evaluate opt-in cloud Smart Scan only if it materially improves a measured sign
 benchmark. It would require a server-held key, consent, rate limits, usage
 accounting and StoreKit purchases. Scan packs are a pricing experiment for later;
 core reminders and manual corrections remain free. No such service ships in v1.
+
+Parking reminders use a rolling 14-day window, with at most 48 upcoming events
+on each enabled device. Open the app to extend the schedule. Permissions and
+OS delivery behavior still apply.

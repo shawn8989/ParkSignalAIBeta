@@ -37,7 +37,7 @@ struct AddEditRestrictionView: View {
                 
                 Section("Maximum Stay") {
                     Toggle("A maximum stay applies", isOn: $hasLimit)
-                    if hasLimit { Stepper("\(limitMinutes) minutes", value: $limitMinutes, in: 1...1440) }
+                    if hasLimit { Stepper("\(limitMinutes) minutes", value: $limitMinutes, in: 1...10080) }
                     Text("Matching start and end times mean all day. Hours and maximum stay are separate.").font(.footnote)
                 }
                 Section(header: Text("Days of Week")) {

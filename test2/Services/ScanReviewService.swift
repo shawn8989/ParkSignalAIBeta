@@ -17,7 +17,7 @@ struct ScanReviewService {
     let context: ModelContext
 
     func save(_ drafts: [ReviewedRestriction], for spot: ParkingSpot, scan: SignScan?,
-              text: String, photoFilename: String?, sourceUser: UUID) throws -> [Restriction] {
+              text: String, photoFilename: String?, sourceUser: UUID, sourceRequiresReview: Bool = false) throws -> [Restriction] {
         // Replace only this scan's rules. Other signs on the same curb remain intact.
         let old = scan?.restrictionsList ?? []
         for rule in old { context.delete(rule) }
@@ -25,7 +25,7 @@ struct ScanReviewService {
             Restriction(type: draft.type, startTime: draft.start, endTime: draft.end,
                         daysOfWeek: draft.days, sourceUser: sourceUser,
                         signPhotoFilename: photoFilename, ocrText: text, spot: spot, scan: scan,
-                        needsReview: draft.needsReview || draft.type == .other, reviewReasons: draft.reviewReasons,
+                        needsReview: sourceRequiresReview || draft.needsReview || draft.type == .other, reviewReasons: draft.reviewReasons,
                         durationMinutes: draft.durationMinutes)
         }
         for rule in created {
@@ -39,6 +39,7 @@ struct ScanReviewService {
             scan.analyzedAt = Date()
             scan.mergedOCRText = text
             scan.aiAnalysisText = nil
+            scan.localAnalysisText = nil
             scan.signalState = scan.needsReview ? "gray" : ParkingSignalEvaluator.status(for: created).rawValue
             spot.updateLastScan(from: scan)
         }

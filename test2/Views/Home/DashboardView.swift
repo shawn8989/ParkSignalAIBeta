@@ -10,6 +10,7 @@ import SwiftData
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @StateObject private var dataProvider = ParkingDataProvider.shared
 
     // Fetch persisted spots
@@ -73,7 +74,7 @@ struct DashboardView: View {
                     // Floating "center on my location" button
                     Button(action: centerOnUserButtonTapped) {
                         Image(systemName: "location.circle.fill")
-                            .font(.title2)
+                            .font(.system(size: 24))
                             .foregroundColor(.primary)
                             .padding(10)
                             .background(.thinMaterial)
@@ -83,7 +84,7 @@ struct DashboardView: View {
                     .accessibilityLabel("Center on My Location")
                     .padding(12)
                 }
-                .frame(height: 300)
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? 180 : 300)
 
                 if let city = dataProvider.matchedCity {
                     Text("City Data Active: \(city.cityName)")
@@ -146,7 +147,10 @@ struct DashboardView: View {
                     }
 
                     ForEach(spots, id: \.id) { spot in
-                        HStack {
+                        let rowLayout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                            : AnyLayout(HStackLayout())
+                        rowLayout {
                             // Single tap opens details (intuitive)
                             Button {
                                 selectedSpot = spot
@@ -154,6 +158,7 @@ struct DashboardView: View {
                                 VStack(alignment: .leading) {
                                     Text(spot.location)
                                         .font(.headline)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text("\(spot.restrictionsList.count) restriction(s)")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
@@ -165,31 +170,35 @@ struct DashboardView: View {
                             }
                             .buttonStyle(.plain)
 
-                            // Visible quick action to center the map on this spot
-                            Button {
-                                centerOnSpot(spot)
-                            } label: {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .imageScale(.medium)
-                                    .padding(8)
-                                    .background(.thinMaterial)
-                                    .clipShape(Circle())
-                            }
-                            .buttonStyle(.borderless) // avoid triggering the row button
-                            .accessibilityLabel("Show on Map")
+                            HStack {
+                                // Visible quick action to center the map on this spot
+                                Button {
+                                    centerOnSpot(spot)
+                                } label: {
+                                    Image(systemName: "mappin.and.ellipse")
+                                        .imageScale(.medium)
+                                        .padding(8)
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .background(.thinMaterial)
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.borderless) // avoid triggering the row button
+                                .accessibilityLabel("Show on Map")
 
-                            // Edit button
-                            Button {
-                                editingSpot = spot
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .imageScale(.medium)
-                                    .padding(8)
-                                    .background(.thinMaterial)
-                                    .clipShape(Circle())
+                                // Edit button
+                                Button {
+                                    editingSpot = spot
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .imageScale(.medium)
+                                        .padding(8)
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .background(.thinMaterial)
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Edit Spot")
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("Edit Spot")
                         }
                         // Extra ways to access “Show on Map”
                         .contextMenu {
@@ -478,13 +487,14 @@ struct DashboardView: View {
             Image(systemName: status.iconName)
                 .accessibilityHidden(true)
             Text(status.label)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.caption)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(status.color.opacity(0.12))
-        .foregroundStyle(status.color)
-        .clipShape(Capsule())
+        .foregroundStyle(.primary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
     
     private func currentCurbStatus() -> ParkingSignalStatus? {
@@ -557,4 +567,3 @@ private struct OrientationPromptView: View {
         }
     }
 }
-
