@@ -48,14 +48,16 @@ struct ParkSignalApp: App {
         // can explicitly opt in for the owner's authenticated sync verification.
         #if targetEnvironment(simulator)
         let useCloudKit = ProcessInfo.processInfo.arguments.contains("-EnableCloudKitSimulator")
+        let database: ModelConfiguration.CloudKitDatabase = useCloudKit ? .private("iCloud.com.SOTech.ParkSignalAI") : .none
         StorageStatus.shared.localOnlyReason = "This simulator uses local storage. Verify iCloud on a signed device, or enable CloudKit on a signed simulator."
         #else
         let useCloudKit = true
+        let database = ModelConfiguration.CloudKitDatabase.private("iCloud.com.SOTech.ParkSignalAI")
         #endif
         let cloudConfig = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            cloudKitDatabase: useCloudKit ? .private("iCloud.com.SOTech.ParkSignalAI") : .none
+            cloudKitDatabase: database
         )
         do {
             sharedModelContainer = try ModelContainer(for: schema, configurations: [cloudConfig])

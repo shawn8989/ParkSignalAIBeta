@@ -102,7 +102,11 @@ current age-rating, export-compliance and distribution questionnaires honestly;
 do not reuse an assumed age rating from old notes. Privacy manifests and App Store
 privacy answers are separate requirements.
 
-## 8. Archive, upload, test Production, submit — owner
+## 8. Archive, upload, test Production, submit
+
+The owner has authorized the assistant to upload after readiness checks pass.
+Account sign-in/MFA, schema deployment and accurate submission answers still need
+the owner. An upload is not an automatic public release.
 
 Choose the reviewed integrated commit, verify a new build number, select Any iOS
 Device and Product → Archive. Validate in Organizer, then Distribute → App Store

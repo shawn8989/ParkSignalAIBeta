@@ -57,6 +57,37 @@ behavior/schema changes are offered in [PR #26](https://github.com/shawn8989/Par
 - Owner's original dirty entitlement SHA-256 remains
   `0bc905b9bcd36669ee3e75e7e0c1a68e12b4d0546141cea32186134cf2542bd9`.
 
+## Physical-device follow-up
+
+2026-10-12: signed Release installed on an iPhone 16 Pro Max running iOS 26.2,
+using the owner's existing entitlement file only as a build override. No capability
+file or provisioning setting was changed. A private backup of Documents/Library is
+retained outside Git in the Mac's ParkSignal application-support folder.
+
+- Every pre-upgrade model ID remained in the upgraded store; counts were unchanged
+  (8 spots, 1 car, 14 sessions, 4 scans, 10 restrictions and 1 current-parking record).
+  The owner confirmed saved spots and photos remain visible. Three referenced
+  PhotoBlob rows were created by backfill.
+- Settings reported **iCloud transfer completed**; Alerts showed Notifications
+  Allowed and System Alarms Authorized. This is one-device evidence, not proof that
+  the records/photos arrive on a second device or that Production schema is ready.
+- The Release active-alarm list opened and showed no active alarms. Reminders were
+  off on this device. Alarm firing/cancellation with a real scheduled event remains
+  unverified in this session.
+- Fixed a device-only unreachable-code compiler warning in CloudKit configuration.
+  CI now also compiles unsigned physical-device Release, so simulator-only checks
+  cannot miss this branch again. Signed device Debug/Release and simulator Debug
+  passed with compiler warnings treated as errors before this follow-up was committed.
+- Added a production **Enable System Alarms** permission action. Previously the only
+  request path was inside DEBUG test controls. The Release screen displays the live
+  permission state and retains notification fallback.
+
+On 2026-10-12 the owner authorized uploading **when ready**. Preparation may proceed;
+readiness gates still apply. No App Store upload, schema deployment or public release
+has occurred. The phone remains on the Release candidate. The proposed temporary
+Debug installation for a 10-second diagnostic alarm was rejected by automatic
+approval review and did not execute.
+
 ## Public pages
 
 Privacy and support are live (HTTP 200) at:
