@@ -154,3 +154,25 @@ intermittent window/time-out errors returned during the confirmation scroll.
 Production schema, two-device sync, delivery/cancellation, full accessibility and
 the final screenshot set remain release gates. The owner's phone was not used
 for this follow-up.
+
+## CloudKit schema inspection — 2026-10-13
+
+The owner signed into Safari. CloudKit Console confirmed the correct team and
+container. Development had seven application record types; the production preview
+proposed creating all seven, their indexes and standard role grants. Production
+has not yet received these application types. The preview was dismissed without
+Deploy. `CD_CurrentParking` was missing `CD_spotID` despite the property existing
+in the app model: the automatically observed schema is incomplete.
+
+Prepared an explicit Debug-only `-InitializeCloudKitSchema` tool following Apple's
+SwiftData/Core Data procedure. It generates the complete model using the app's
+shared type list and uses a separate temporary local store. Release excludes the
+initializer. It has not been run against CloudKit or installed on the phone.
+Local validation: 121 unit tests passed (132 parameterized executions), no failures
+or skips, plus an unsigned physical-device Release build with compiler warnings
+as errors. Original dirty entitlements are byte-for-byte unchanged.
+
+See `CLOUDKIT_SCHEMA_INITIALIZATION.md` for the controlled owner-assisted run,
+field verification and deployment steps. Do not deploy the incomplete preview.
+The previous exported IPA remains tied to commit 6001c85; rebuild/archive the final
+verified source before eventual upload. No upload or public release occurred.

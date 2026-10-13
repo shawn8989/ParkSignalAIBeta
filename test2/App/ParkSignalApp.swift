@@ -37,10 +37,7 @@ struct ParkSignalApp: App {
     init() {
         UNUserNotificationCenter.current().delegate = AppNotificationDelegate.shared
 
-        let schema = Schema([
-            User.self, Car.self, ParkingSpot.self, Restriction.self,
-            CurrentParking.self, ParkSession.self, SignScan.self, PhotoBlob.self
-        ])
+        let schema = Schema(ParkSignalModelSchema.types)
         // Sync the user's own data across their devices via the CloudKit private
         // database (iCloud identity is the "account" — no login needed).
         // Unsigned simulator processes lack CloudKit entitlements; initialization
@@ -53,6 +50,20 @@ struct ParkSignalApp: App {
         #else
         let useCloudKit = true
         let database = ModelConfiguration.CloudKitDatabase.private("iCloud.com.SOTech.ParkSignalAI")
+        #endif
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-InitializeCloudKitSchema") {
+            if useCloudKit {
+                do {
+                    try CloudSchemaPreparation.initializeDevelopmentSchema()
+                    print("ParkSignal development schema initialization completed. Verify every field in CloudKit Console before deployment.")
+                } catch {
+                    AppIssueStore.shared.message = "Development schema initialization failed: \(error.localizedDescription)"
+                }
+            } else {
+                AppIssueStore.shared.message = "Schema preparation requires a signed, iCloud-enabled device or simulator."
+            }
+        }
         #endif
         let cloudConfig = ModelConfiguration(
             schema: schema,
