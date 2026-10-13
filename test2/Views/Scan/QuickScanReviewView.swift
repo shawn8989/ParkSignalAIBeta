@@ -18,6 +18,7 @@ struct QuickScanReviewView: View {
 
     @State private var showToast = false
     @State private var working = false
+    @State private var saveError: String?
     @State private var showingCamera = false
 
     private let ocrService = VisionOCRService()
@@ -25,6 +26,7 @@ struct QuickScanReviewView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+                if let saveError { Text(saveError).foregroundStyle(.red).padding() }
                 ScrollView {
                     VStack(spacing: 12) {
                         if let last = images.last {
@@ -147,9 +149,8 @@ struct QuickScanReviewView: View {
         defer { working = false }
         var filenames: [String] = []
         for img in images {
-            if let name = try? ImageStore.saveJPEG(img, context: context) {
-                filenames.append(name)
-            }
+            do { filenames.append(try ImageStore.saveJPEG(img, context: context)) }
+            catch { saveError = "Couldn't save the photos: \(error.localizedDescription)"; return }
         }
         withAnimation { showToast = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

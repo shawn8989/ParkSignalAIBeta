@@ -7,6 +7,7 @@ nonisolated enum AIRestrictionType: String, Codable {
     case street_cleaning
     case no_parking
     case metered
+    case time_limited
     case permit
     case other
 }
@@ -21,6 +22,8 @@ nonisolated struct AIRestriction: Codable {
     // Optional, backward-compatible parse metadata (decode to nil when absent):
     var exceptHolidays: Bool? = nil   // sign said "holidays excepted" — restriction skips holidays
     var needsReview: Bool? = nil      // parse was low-confidence; prompt the user to confirm
+    var reviewReasons: [String]? = nil
+    var requiresReview: Bool { needsReview == true || exceptHolidays == true || !(reviewReasons ?? []).isEmpty }
 }
 
 nonisolated struct AIAnalysisResponse: Codable {

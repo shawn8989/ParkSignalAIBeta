@@ -35,7 +35,7 @@ struct CarListView: View {
         NavigationStack {
             List {
                 let lastUsed = cars.first(where: { $0.id == lastUsedCarID })
-                if let last = lastUsed, last.sessions.first(where: { $0.endedAt == nil }) == nil {
+                if let last = lastUsed, last.sessionsList.first(where: { $0.endedAt == nil }) == nil {
                     Section("Last Used") {
                         HStack(spacing: 12) {
                             Image(systemName: last.iconName)
@@ -81,11 +81,11 @@ struct CarListView: View {
                         }
                     }
                 }
-                let parkedCars = cars.filter { $0.sessions.contains { $0.endedAt == nil } }
+                let parkedCars = cars.filter { $0.sessionsList.contains { $0.endedAt == nil } }
                 if !parkedCars.isEmpty {
                     Section("Currently Parked") {
                         ForEach(parkedCars, id: \.id) { car in
-                            if let activeSession = car.sessions.first(where: { $0.endedAt == nil }), let activeSpot = activeSession.spot {
+                            if let activeSession = car.sessionsList.first(where: { $0.endedAt == nil }), let activeSpot = activeSession.spot {
                                 HStack(spacing: 8) {
                                     Image(systemName: car.iconName)
                                         .foregroundStyle(.tint)
@@ -150,7 +150,7 @@ struct CarListView: View {
                             }
                         }
                         Spacer()
-                        if let activeSession = car.sessions.first(where: { $0.endedAt == nil }), let activeSpot = activeSession.spot {
+                        if let activeSession = car.sessionsList.first(where: { $0.endedAt == nil }), let activeSpot = activeSession.spot {
                             HStack(spacing: 6) {
                                 Image(systemName: "parkingsign.circle.fill")
                                     .symbolRenderingMode(.palette)
@@ -186,7 +186,7 @@ struct CarListView: View {
                         }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if let _ = car.sessions.first(where: { $0.endedAt == nil }) {
+                        if let _ = car.sessionsList.first(where: { $0.endedAt == nil }) {
                             Button {
                                 carToAssign = car
                                 showParkPicker = true
@@ -231,7 +231,7 @@ struct CarListView: View {
                         }
                     }
                     .contextMenu {
-                        if let _ = car.sessions.first(where: { $0.endedAt == nil }) {
+                        if let _ = car.sessionsList.first(where: { $0.endedAt == nil }) {
                             Button {
                                 carToAssign = car
                                 showParkPicker = true
@@ -394,7 +394,7 @@ struct CarListView: View {
             iconName: iconName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "car.fill" : iconName
         )
         context.insert(car)
-        try? context.save()
+        guard context.saveOrReport() else { return }
         resetForm()
         showAdd = false
     }
@@ -411,7 +411,7 @@ struct CarListView: View {
         for car in targets {
             context.delete(car)
         }
-        try? context.save()
+        context.saveOrReport()
     }
 
     private func assign(_ car: Car, to spot: ParkingSpot) {
@@ -464,7 +464,7 @@ struct CarListView: View {
     }
 
     private func latestUsageDate(for spot: ParkingSpot) -> Date {
-        let sessionDate = spot.parkSessions.compactMap { $0.startedAt }.max() ?? .distantPast
+        let sessionDate = spot.parkSessionsList.compactMap { $0.startedAt }.max() ?? .distantPast
         return sessionDate
     }
 

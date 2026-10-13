@@ -19,14 +19,14 @@ struct OnboardingView: View {
 
     private let pages: [Page] = [
         Page(symbol: "camera.viewfinder",
-             title: "Scan any parking sign",
-             body: "Point your camera at a street sign and ParkSignal reads the rules for you — no squinting, no guessing."),
+             title: "Read and review parking signs",
+             body: "Scan sign text on your device, then compare the suggested weekly rules with every sign on the curb. Complex exceptions need manual review."),
         Page(symbol: "circle.righthalf.filled",
-             title: "Know if you can park",
-             body: "A clear color signal — green, red, or yellow — tells you at a glance whether it's safe to park right where you are."),
+             title: "Keep your parking rules together",
+             body: "Signals summarize your saved rules. They cannot confirm parking legality or account for missing, temporary or unreadable signs."),
         Page(symbol: "alarm",
-             title: "Never get a ticket",
-             body: "Save the spot and set an alarm. ParkSignal reminds you before a restriction starts, so you have time to move.")
+             title: "Set a parking reminder",
+             body: "Save a spot, confirm its rules and enable reminders on this device. Check that notifications or alarms are allowed; delivery is not guaranteed.")
     ]
 
     var body: some View {

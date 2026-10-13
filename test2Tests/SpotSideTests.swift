@@ -37,7 +37,7 @@ struct DrivingSideParityTests {
 struct SpotMergeServiceTests {
     // The container must outlive the context, so each test holds it.
     private func makeContainer() throws -> ModelContainer {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(
             for: User.self, Car.self, ParkingSpot.self, Restriction.self,
             ParkSession.self, SignScan.self, CurrentParking.self,
@@ -51,8 +51,8 @@ struct SpotMergeServiceTests {
     func sameAddressReuses() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
-        let a = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
-        let b = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let a = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let b = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
         #expect(a.id == b.id)
         #expect(try ctx.fetch(FetchDescriptor<ParkingSpot>()).count == 1)
     }
@@ -61,8 +61,8 @@ struct SpotMergeServiceTests {
     func oppositeSidesSplit() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
-        let even = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
-        let odd = SpotMergeService.findOrCreateSpot(address: "121 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let even = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let odd = try SpotMergeService.findOrCreateSpot(address: "121 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
         #expect(even.id != odd.id)
         #expect(even.streetSide == "right")
         #expect(odd.streetSide == "left")
@@ -73,8 +73,8 @@ struct SpotMergeServiceTests {
     func sameSideDifferentNumberMerges() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
-        let a = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
-        let b = SpotMergeService.findOrCreateSpot(address: "124 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let a = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let b = try SpotMergeService.findOrCreateSpot(address: "124 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
         #expect(a.id == b.id)
         #expect(try ctx.fetch(FetchDescriptor<ParkingSpot>()).count == 1)
     }
@@ -84,8 +84,8 @@ struct SpotMergeServiceTests {
         let container = try makeContainer()
         let ctx = container.mainContext
         let far = CLLocationCoordinate2D(latitude: 37.7767, longitude: -122.4194) // ~200 m north
-        let a = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
-        let b = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: far, in: ctx, preferredSide: "right")
+        let a = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let b = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: far, in: ctx, preferredSide: "right")
         #expect(a.id != b.id)
     }
 
@@ -93,10 +93,10 @@ struct SpotMergeServiceTests {
     func doesNotOverwriteCoordinate() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
-        let a = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
+        let a = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: sf, in: ctx, preferredSide: "right")
         let originalLat = a.latitude
         let jitter = CLLocationCoordinate2D(latitude: 37.77499, longitude: -122.4194) // ~10 m away
-        let b = SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: jitter, in: ctx, preferredSide: "right")
+        let b = try SpotMergeService.findOrCreateSpot(address: "120 Main St, SF, CA", coordinate: jitter, in: ctx, preferredSide: "right")
         #expect(a.id == b.id)
         #expect(b.latitude == originalLat)
     }

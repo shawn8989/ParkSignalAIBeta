@@ -50,8 +50,8 @@ struct ScansView: View {
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
-                                context.delete(scan)
-                                try? context.save()
+                                do { try ParkingDataDeletion(context: context).delete(scans: [scan]) }
+                                catch { AppIssueStore.shared.message = error.localizedDescription }
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -96,8 +96,8 @@ struct ScansView: View {
 
     private func deleteAllFiltered() {
         let targets = filteredScans
-        for s in targets { context.delete(s) }
-        try? context.save()
+        do { try ParkingDataDeletion(context: context).delete(scans: targets) }
+        catch { AppIssueStore.shared.message = error.localizedDescription }
     }
 }
 

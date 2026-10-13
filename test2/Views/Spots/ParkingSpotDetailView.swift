@@ -51,7 +51,7 @@ struct ParkingSpotDetailView: View {
     @State private var segmentEditScan: SignScan? = nil
 
     private var lastScan: SignScan? {
-        spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
+        spot.signScansList.sorted(by: { $0.createdAt > $1.createdAt }).first
     }
 
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
@@ -78,7 +78,7 @@ struct ParkingSpotDetailView: View {
     }
     
     private var lastScanSignalStatus: ParkingSignalStatus? {
-        if let scan = spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first {
+        if let scan = spot.signScansList.sorted(by: { $0.createdAt > $1.createdAt }).first {
             return ParkingSignalEvaluator.status(for: scan, now: Date(), leadMinutes: leadMinutes)
         }
         return nil
@@ -97,7 +97,6 @@ struct ParkingSpotDetailView: View {
                 deviceCoordinate: locationManager.lastLocation?.coordinate,
                 presentMap: presentMap
             )
-            SpotCityDataSection(spot: spot)
             savedScanSection()
             restrictionsSection()
             SpotDangerZoneSection { showDeleteAlert = true }
@@ -188,21 +187,23 @@ struct ParkingSpotDetailView: View {
                     if let userID = currentUserID {
                         newRestriction.sourceUser = userID
                     }
-                    if let existing = spot.restrictions.first(where: { $0.id == newRestriction.id }) {
+                    if let existing = spot.restrictionsList.first(where: { $0.id == newRestriction.id }) {
                         // Update existing restriction in place
-                        if let index = spot.restrictions.firstIndex(of: existing) {
-                            spot.restrictions[index] = newRestriction
+                        if let index = spot.restrictionsList.firstIndex(of: existing) {
+                            spot.restrictionsList[index] = newRestriction
                         }
                     } else {
                         // Insert new restriction
                         context.insert(newRestriction)
                         newRestriction.spot = spot
-                        spot.restrictions.append(newRestriction)
+                        spot.restrictionsList.append(newRestriction)
                     }
                     do {
                         try context.save()
                     } catch {
-                        // In a real app, surface this to the user
+                        context.rollback()
+                        AppIssueStore.shared.message = "Couldn’t save the rule: \(error.localizedDescription)"
+                        return
                     }
                     onUpdate?(spot)
                     // Cancel any prior alarms for this restriction id (handles edits that
@@ -212,7 +213,6 @@ struct ParkingSpotDetailView: View {
                         await NotificationManager.shared.cancel(forRestrictionIDs: [saved.id])
                         await NotificationManager.shared.schedule(for: [saved], spot: spot)
                     }
-                    Task { await enrichFromCityData() }
                 },
                 sourceUser: currentUserID ?? UUID()
             )
@@ -244,7 +244,9 @@ struct ParkingSpotDetailView: View {
 
                             // Find or create a ParkingSpot by normalized address (main actor)
                             let preferredSide = spot.streetSide
-                            let targetSpot = SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
+                            let targetSpot: ParkingSpot
+                            do { targetSpot = try SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide) }
+                            catch { AppIssueStore.shared.message = "Couldn’t save the spot: \(error.localizedDescription)"; return }
 
                             // Insert SignScan attached to the targetSpot
                             await MainActor.run {
@@ -281,7 +283,7 @@ struct ParkingSpotDetailView: View {
                                     defaultRadius: 15.0
                                 )
 
-                                try? context.save()
+                                do { try context.save() } catch { AppIssueStore.shared.message = "Couldn’t save changes: \(error.localizedDescription)"; return }
                                 showToast(message: "Scan saved. Analyzing…")
                             }
 
@@ -339,30 +341,10 @@ struct ParkingSpotDetailView: View {
                         ocrText: ocrText,
                         photoFilename: photoFilename,
                         analysis: analysis,
-                        onFinished: { createdRestrictions in
+                        scan: (analysisSpotOverride ?? spot).signScansList.sorted { $0.createdAt > $1.createdAt }.first,
+                        onFinished: { _ in
                             onUpdate?(spot)
-                            Task { @MainActor in
-                                let activeSpot = analysisSpotOverride ?? spot
-                                // Fetch alarms (async) then record their ids
-                                let alarms = await AlarmService.shared.allAlarms()
-                                activeSpot.alarmIDs = alarms.map { $0.id }
-                                try? context.save()
-                                // Upload only the newly confirmed restrictions
-                                let lastScan: SignScan? = activeSpot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
-                                if let lastScan {
-                                    await MainActor.run {
-                                        // Link restrictions to this scan
-                                        for r in createdRestrictions { r.scan = lastScan }
-                                        lastScan.restrictions = createdRestrictions
-                                        lastScan.status = "complete"
-                                        let sig = ParkingSignalEvaluator.status(for: createdRestrictions, now: Date(), leadMinutes: leadMinutes)
-                                        lastScan.signalState = sig.rawValue
-                                        try? context.save()
-                                        showToast(message: "Restrictions added successfully")
-                                    }
-                                }
-                                analysisSpotOverride = nil
-                            }
+                            analysisSpotOverride = nil
                         }
                     )
                     .environment(\.modelContext, context)
@@ -428,7 +410,7 @@ struct ParkingSpotDetailView: View {
                 .environment(\.modelContext, context)
         }
         .onAppear {
-            if let current = spot.parkSessions.first(where: { $0.endedAt == nil && $0.car != nil })?.car?.id {
+            if let current = spot.parkSessionsList.first(where: { $0.endedAt == nil && $0.car != nil })?.car?.id {
                 parking.selectedCarID = current
             }
             parking.refresh(for: spot)
@@ -437,7 +419,7 @@ struct ParkingSpotDetailView: View {
         .onDisappear {
             locationManager.stopUpdatingLocation()
         }
-        .onChange(of: spot.parkSessions.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _, _ in
+        .onChange(of: spot.parkSessionsList.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _, _ in
             parking.refresh(for: spot)
         }
         .alert("Schedule Alert?", isPresented: $parking.showSchedulePrompt) {
@@ -511,7 +493,7 @@ struct ParkingSpotDetailView: View {
                 Circle().fill(s.color).frame(width: 10, height: 10)
             }
         }) {
-            if let last = spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first {
+            if let last = spot.signScansList.sorted(by: { $0.createdAt > $1.createdAt }).first {
                 Button {
                     let coord = CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)
                     mapRegion = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
@@ -534,7 +516,7 @@ struct ParkingSpotDetailView: View {
                             self.resolvedSavedScanAddress = addr
                             if let a = addr, !a.isEmpty {
                                 last.address = a
-                                try? context.save()
+                                do { try context.save() } catch { AppIssueStore.shared.message = "Couldn’t save changes: \(error.localizedDescription)"; return }
                             }
                         }
                     } else {
@@ -590,7 +572,7 @@ struct ParkingSpotDetailView: View {
     @ViewBuilder
     private func restrictionsSection() -> some View {
         Section(header: Text("Restrictions")) {
-            ForEach(spot.restrictions, id: \.id) { restriction in
+            ForEach(spot.restrictionsList, id: \.id) { restriction in
                 VStack(alignment: .leading) {
                     Text(restriction.type.displayName)
                         .font(.headline)
@@ -608,17 +590,17 @@ struct ParkingSpotDetailView: View {
                 }
             }
             .onDelete { indexSet in
-                let items = indexSet.map { spot.restrictions[$0] }
+                let items = indexSet.map { spot.restrictionsList[$0] }
                 let ids = items.map { $0.id }
                 for r in items {
                     context.delete(r)
                 }
-                spot.restrictions.remove(atOffsets: indexSet)
-                try? context.save()
+                spot.restrictionsList.remove(atOffsets: indexSet)
+                do { try context.save() } catch { AppIssueStore.shared.message = "Couldn’t save changes: \(error.localizedDescription)"; return }
                 // Remove the deleted restrictions' repeating alarms.
                 Task { await NotificationManager.shared.cancel(forRestrictionIDs: ids) }
             }
-            if spot.restrictions.isEmpty {
+            if spot.restrictionsList.isEmpty {
                 Text("No restrictions recorded.")
                     .foregroundColor(.secondary)
             }
@@ -644,13 +626,9 @@ struct ParkingSpotDetailView: View {
         usedAIParsing = false
         aiFallbackReason = nil
         analysis = localParser.analyze(ocrText: text)
-        if let analysis, !analysis.restrictions.isEmpty {
+        if analysis != nil {
             showAnalysisSheet = true
         }
-    }
-
-    private func enrichFromCityData() async {
-        await CityRestrictionImporter.importNear(spot: spot, context: context)
     }
 
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> String? {
@@ -674,25 +652,10 @@ struct ParkingSpotDetailView: View {
     }
     
     private func deleteSpot() {
-        // Cancel pending alerts for any cars parked here
-        let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-        let parkedCarIDs = active.compactMap { $0.car?.id }
-        let service = sessions
-        Task { for id in parkedCarIDs { await service.cancelMoveAlert(forCarID: id) } }
-
-        // Cancel the repeating weekly alarms for this spot's restrictions before deleting.
-        let restrictionIDs = spot.restrictions.map { $0.id }
-        Task { await NotificationManager.shared.cancel(forRestrictionIDs: restrictionIDs) }
-
-        // Delete child objects explicitly to avoid dangling references
-        for r in spot.restrictions { context.delete(r) }
-        for s in spot.signScans { context.delete(s) }
-        for ps in spot.parkSessions { context.delete(ps) }
-
-        // Finally delete the spot
-        context.delete(spot)
-        do { try context.save() } catch { }
-        dismiss()
+        do {
+            try ParkingDataDeletion(context: context).delete(spots: [spot])
+            dismiss()
+        } catch { AppIssueStore.shared.message = "Couldn't delete this spot: \(error.localizedDescription)" }
     }
 
 }

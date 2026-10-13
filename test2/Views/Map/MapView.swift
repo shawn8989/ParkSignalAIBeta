@@ -339,8 +339,8 @@ struct MapView: View {
             .overlay(alignment: .topLeading) {
                 if showLegend {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) { ColorSwatch(hex: "4CD964"); Text("Safe to Park").font(.caption) }
-                        HStack(spacing: 6) { ColorSwatch(hex: "FF3B30"); Text("Illegal Now").font(.caption) }
+                        HStack(spacing: 6) { ColorSwatch(hex: "4CD964"); Text("No saved rule active").font(.caption) }
+                        HStack(spacing: 6) { ColorSwatch(hex: "FF3B30"); Text("Restriction active").font(.caption) }
                         HStack(spacing: 6) { ColorSwatch(hex: "FFCC00"); Text("Restriction Soon").font(.caption) }
                         HStack(spacing: 6) { ColorSwatch(hex: "007AFF"); Text("Permit/ADA").font(.caption) }
                         HStack(spacing: 6) { ColorSwatch(hex: "AF52DE"); Text("Metered/Paid").font(.caption) }
@@ -424,7 +424,7 @@ struct MapView: View {
     private enum SpotStatus { case parked, notAllowed, soon, normal }
 
     private func spotStatus(for spot: ParkingSpot) -> SpotStatus {
-        if spot.parkSessions.contains(where: { $0.endedAt == nil }) { return .parked }
+        if spot.parkSessionsList.contains(where: { $0.endedAt == nil }) { return .parked }
         if spot.isRestrictedNow(at: now) { return .notAllowed }
         if let next = spot.nextRestrictionDate(from: now), next.timeIntervalSinceNow <= 2 * 60 * 60 { return .soon }
         return .normal

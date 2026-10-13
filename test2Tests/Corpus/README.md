@@ -1,53 +1,29 @@
-# Parking-sign corpus
+# Sign interpretation corpus
 
-`sign_corpus.json` is the accuracy benchmark for the on-device parser (`ParkingTextParser`).
-`ParserCorpusTests` runs every entry on each CI run and prints one line per sign:
+`sign_corpus.json` contains 42 curated text transcriptions/patterns. This is a
+parser regression corpus, not a measured photographic OCR accuracy study.
 
-```
-CORPUS|PASS|sf-street-cleaning-tue|expected: …|actual: …
-CORPUS|SUMMARY|31/42 signs parsed correctly (73.8%)
-```
+There are two acceptance classes:
 
-- `PASS`: the parser output matches.
-- `KNOWN`: a known failure (`"knownFailing": true`), so it doesn't fail the build.
-- `FAIL`: a regression. The test fails and CI goes red.
-- `NOW-PASSING`: lists known failures that started passing; set `knownFailing` to `false` so they stay fixed.
+- `requiresReview: false`: every expected type, weekday, hour and maximum duration
+  must match, and the result must not require review.
+- `requiresReview: true`: the weekly model cannot represent the full condition.
+  The result must be nonempty, every rule must require review, and its signal must
+  be gray. The text remains available for manual review; no automatic reminders.
 
-To find the table in CI, open the **Build & unit test** step log and search for `CORPUS|`.
+The current split is 30 supported patterns and 12 intentionally unresolved patterns.
+The latter cover monthly/date/holiday/exemption/loading conditions; they are not
+counted as correctly interpreted signs. “42/42 correct or explicitly unresolved”
+is a safety acceptance result, not 100% interpretation accuracy.
 
-## Adding a real sign
+No failing-case exemption is allowed. CI fails on an incorrect supported parse or
+an unsupported sign that loses its review state. Add a documented `source`, unique
+`id`, `ocrText`, expected rules and `requiresReview` for each regression. Only mark
+review-required for a genuine unsupported condition, not to conceal a bug in a
+supported weekly pattern. For image fixtures, record permission/source and add
+`image` instead of `ocrText`; OCR then runs through Vision.
 
-The seed entries are typed-in wording of common US signs. The benchmark only becomes trustworthy with real photos, and **50–100 of them** is the goal.
-
-1. Photograph the sign straight on and crop it to the sign.
-2. Save it here as a JPEG with a unique name, e.g. `test2Tests/Corpus/nyc-bk-atlantic-ave-01.jpg`. Files are bundled automatically, but **flat**: names must be unique across the whole test bundle.
-3. Add an entry:
-
-```json
-{
-  "id": "nyc-bk-atlantic-ave-01",
-  "source": "NYC",
-  "image": "nyc-bk-atlantic-ave-01.jpg",
-  "expected": [
-    { "type": "no_parking", "days": [1, 2, 3, 4, 5], "start": "07:00", "end": "10:00" }
-  ],
-  "knownFailing": false,
-  "notes": "Brooklyn, Atlantic Ave northside"
-}
-```
-
-With `image` set, the test runs Vision OCR on the photo first. That tests the whole pipeline, not just the parser. You can also give `ocrText` alone, e.g. text copied from the app's "Last OCR" section.
-
-## Writing `expected`
-
-Write what the sign **means**, not what the parser currently returns.
-
-| Field | Rule |
-|---|---|
-| `type` | `street_cleaning`, `no_parking` (also no standing/stopping, tow-away, loading, fire lane), `metered` (paid or time-limited), `permit` (permit/resident/accessible), `other` |
-| `days` | 0 = Sunday … 6 = Saturday. `[]` = every day. |
-| `start`/`end` | `"HH:mm"` 24-hour. Leave both out for "anytime". Overnight windows keep `end < start`. |
-| `durationMinutes` | For time limits ("2 HOUR PARKING" → 120). Only checked when present. |
-| `exceptHolidays` | `true` when the sign excepts holidays. Only checked when present. |
-
-If the parser gets a new sign wrong, set `"knownFailing": true` and describe the gap in `notes`. The entry then tracks the gap without breaking CI.
+`ParserCorpusTests` prints per-case PASS/REVIEW/FAIL and a summary. CI includes this
+report in its job summary when the test-runner output path is available. Additional
+unit tests cover ambiguity, durations, DST/time zones, saved review states and
+reminder suppression; the corpus does not replace field testing.

@@ -16,11 +16,11 @@ struct SpotSegmentSections: View {
 
     var body: some View {
         segmentMapPreviewSection()
-        segmentEditorSection()
+        DisclosureGroup("Advanced curb geometry") { segmentEditorSection() }
     }
 
     private var lastScan: SignScan? {
-        spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
+        spot.signScansList.sorted(by: { $0.createdAt > $1.createdAt }).first
     }
 
     private var spotCoordinate: CLLocationCoordinate2D {
@@ -30,7 +30,7 @@ struct SpotSegmentSections: View {
     @ViewBuilder
     private func segmentMapPreviewSection() -> some View {
         Section(header: Text("Map Preview")) {
-            let last = spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
+            let last = spot.signScansList.sorted(by: { $0.createdAt > $1.createdAt }).first
             let center = CLLocationCoordinate2D(
                 latitude: last?.segmentCenterLat ?? last?.latitude ?? spot.latitude,
                 longitude: last?.segmentCenterLon ?? last?.longitude ?? spot.longitude
@@ -133,7 +133,7 @@ struct SpotSegmentSections: View {
                         get: { (scan.segmentRadius ?? 15) * 2 },
                         set: { newLength in
                             scan.segmentRadius = max(5, newLength / 2)
-                            try? context.save()
+                            context.saveOrReport()
                         }
                     ), in: 10...100, step: 2)
 
@@ -146,7 +146,7 @@ struct SpotSegmentSections: View {
                             } else {
                                 scan.segmentDirection = nil
                             }
-                            try? context.save()
+                            context.saveOrReport()
                         }
                     ))
 
@@ -161,7 +161,7 @@ struct SpotSegmentSections: View {
                             get: { scan.segmentDirection ?? dir },
                             set: { nv in
                                 scan.segmentDirection = CurbGeometry.normalizedHeading(nv)
-                                try? context.save()
+                                context.saveOrReport()
                             }
                         ), in: 0...360, step: 1)
                     }
@@ -171,7 +171,7 @@ struct SpotSegmentSections: View {
                             // Use scan raw pin as center
                             scan.segmentCenterLat = scan.latitude
                             scan.segmentCenterLon = scan.longitude
-                            try? context.save()
+                            context.saveOrReport()
                         } label: {
                             Label("Use Scan as Center", systemImage: "mappin")
                         }
@@ -182,7 +182,7 @@ struct SpotSegmentSections: View {
                             if let c = deviceCoordinate {
                                 scan.segmentCenterLat = c.latitude
                                 scan.segmentCenterLon = c.longitude
-                                try? context.save()
+                                context.saveOrReport()
                             }
                         } label: {
                             Label("Use My Location", systemImage: "location")
@@ -216,7 +216,7 @@ struct SpotSegmentSections: View {
                     Button {
                         scan.segmentCenterLat = spot.latitude
                         scan.segmentCenterLon = spot.longitude
-                        try? context.save()
+                        context.saveOrReport()
                     } label: {
                         Label("Use Spot as Center", systemImage: "mappin.circle")
                     }
@@ -259,7 +259,7 @@ struct SpotSegmentSections: View {
         )
         context.insert(scan)
         spot.attach(scan: scan)
-        try? context.save()
+        context.saveOrReport()
         return scan
     }
 
@@ -268,6 +268,6 @@ struct SpotSegmentSections: View {
         scan.segmentCenterLon = nil
         scan.segmentRadius = nil
         scan.segmentDirection = nil
-        try? context.save()
+        context.saveOrReport()
     }
 }

@@ -9,6 +9,7 @@ import MapKit
 private struct PendingAnalysis: Identifiable {
     let id = UUID()
     let spot: ParkingSpot
+    let scan: SignScan
     let scanText: String
     let photoFilename: String?
     let analysis: AIAnalysisResponse
@@ -36,7 +37,6 @@ struct QuickScanSheet: View {
     @State private var pendingAnalysis: PendingAnalysis? = nil
 
     private let ocrService = VisionOCRService()
-    private let aiService = AIAnalyzerService()
     private let localParser = ParkingTextParser()
 
     var body: some View {
@@ -72,7 +72,7 @@ struct QuickScanSheet: View {
                     }
                     ButtonsRow(
                         recognizedText: $recognizedText,
-                        onAnalyze: { Task { await analyzeRecognizedText(useAI: false) } },
+                        onAnalyze: { Task { await analyzeRecognizedText() } },
                         onClear: { recognizedText = "" }
                     )
                     .padding(.horizontal)
@@ -112,13 +112,19 @@ struct QuickScanSheet: View {
                         onSubmit: { mergedText, filenames in
                             Task { @MainActor in
                                 // Resolve current coordinate and address
-                                let coord = locationManager.lastLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+                                guard let coord = locationManager.lastLocation?.coordinate else {
+                                    errorMessage = "A location is needed to save this scan. Allow location access or scan from a saved spot."
+                                    showReview = false
+                                    return
+                                }
                                 let geocoder = GeocodingService()
                                 let address = await geocoder.reverseGeocode(coordinate: coord)
 
                                 // Find or create the spot (on the main actor)
                                 let preferredSide = DrivingSide.storedSide(from: "with")
-                                let spot = SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide)
+                                let spot: ParkingSpot
+                                do { spot = try SpotMergeService.findOrCreateSpot(address: address, coordinate: coord, in: context, preferredSide: preferredSide) }
+                                catch { AppIssueStore.shared.message = "Couldn’t save the spot: \(error.localizedDescription)"; return }
 
                                 // Insert SignScan attached to the spot
                                 let scan = SignScan(
@@ -139,7 +145,12 @@ struct QuickScanSheet: View {
                                 )
                                 context.insert(scan)
                                 spot.attach(scan: scan)
-                                try? context.save()
+                                do { try context.save() } catch {
+                                    context.rollback()
+                                    errorMessage = "Couldn't save the scan: \(error.localizedDescription)"
+                                    showReview = false
+                                    return
+                                }
 
                                 // Assign to nearest segment on the same side (or create)
                                 let allScans = (try? context.fetch(FetchDescriptor<SignScan>())) ?? []
@@ -152,15 +163,14 @@ struct QuickScanSheet: View {
                                     preferredSide: StreetSide(rawValue: spot.streetSide.lowercased()),
                                     defaultRadius: 15.0
                                 )
-                                try? context.save()
-
-                                // Run AI pipeline (fallback to on-device parser) and attach restrictions to scan and spot
-                                var parsed: AIAnalysisResponse
-                                do {
-                                    parsed = try await aiService.analyze(ocrText: mergedText).parsed
-                                } catch {
-                                    parsed = localParser.analyze(ocrText: mergedText)
+                                do { try context.save() } catch {
+                                    context.rollback()
+                                    errorMessage = "Couldn't save the scan: \(error.localizedDescription)"
+                                    showReview = false
+                                    return
                                 }
+
+                                let parsed = localParser.analyze(ocrText: mergedText)
 
                                 // Present the editable confirmation screen instead of silently
                                 // committing possibly-wrong restrictions. Restrictions are created
@@ -170,14 +180,19 @@ struct QuickScanSheet: View {
                                     let status = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
                                     signalStatus = status
                                     scan.signalState = status.rawValue
-                                    scan.status = "complete"
+                                    scan.status = "needsReview"
                                     scan.analyzedAt = Date()
-                                    try? context.save()
+                                    do { try context.save() } catch {
+                                    context.rollback()
+                                    errorMessage = "Couldn't save the scan: \(error.localizedDescription)"
+                                    showReview = false
+                                    return
+                                }
 
                                     showReview = false
                                     showCamera = false
 
-                                    pendingAnalysis = PendingAnalysis(spot: spot,
+                                    pendingAnalysis = PendingAnalysis(spot: spot, scan: scan,
                                                                       scanText: mergedText,
                                                                       photoFilename: filenames.first,
                                                                       analysis: parsed)
@@ -204,6 +219,7 @@ struct QuickScanSheet: View {
                     ocrText: pending.scanText,
                     photoFilename: pending.photoFilename,
                     analysis: pending.analysis,
+                    scan: pending.scan,
                     onFinished: { _ in dismiss() }
                 )
                 .environment(\.modelContext, context)
@@ -244,18 +260,13 @@ struct QuickScanSheet: View {
     }
 
     @MainActor
-    private func analyzeRecognizedText(useAI: Bool) async {
+    private func analyzeRecognizedText() async {
         guard !recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         isAnalyzing = true
         errorMessage = nil
         defer { isAnalyzing = false }
 
-        let parsed: AIAnalysisResponse
-        if useAI, let aiResult = try? await aiService.analyze(ocrText: recognizedText) {
-            parsed = aiResult.parsed
-        } else {
-            parsed = localParser.analyze(ocrText: recognizedText)
-        }
+        let parsed = localParser.analyze(ocrText: recognizedText)
         signalStatus = ParkingSignalEvaluator.status(for: parsed, now: Date(), leadMinutes: leadMinutes)
     }
 

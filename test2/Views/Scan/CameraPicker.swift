@@ -13,6 +13,9 @@ struct CameraPicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.allowsEditing = false
+        #if targetEnvironment(simulator)
+        picker.sourceType = .photoLibrary
+        #else
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             picker.sourceType = .camera
             picker.cameraCaptureMode = .photo
@@ -20,6 +23,7 @@ struct CameraPicker: UIViewControllerRepresentable {
             // Simulator fallback
             picker.sourceType = .photoLibrary
         }
+        #endif
         return picker
     }
 
@@ -40,10 +44,10 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                onImagePicked(image)
+            let image = info[.originalImage] as? UIImage
+            picker.dismiss(animated: true) { [self] in
+                if let image { onImagePicked(image) } else { onCancel?() }
             }
-            picker.dismiss(animated: true)
         }
     }
 }

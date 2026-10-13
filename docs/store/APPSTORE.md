@@ -1,131 +1,72 @@
-# App Store Connect listing — ParkSignal AI (v1)
+# ParkSignal AI — v1 listing
 
-Draft copy and metadata for submission. Paste into App Store Connect. Fields
-respect Apple's character limits.
+Release candidate: free download, no advertising, no purchases, no cloud AI.
+Do not submit until SUBMISSION_CHECKLIST.md's release gates are satisfied.
 
----
+## Name (30 maximum)
+ParkSignal AI
 
-## App name (max 30)
-`ParkSignal AI`
+## Subtitle (30 maximum)
+Parking signs and reminders
 
-## Subtitle (max 30)
-`Read parking signs instantly`
+## Promotional text (170 maximum)
+Read parking-sign text on your iPhone, review the suggested rules, save your spot and set reminders. No app account, ads or paid subscription.
 
-Alternatives:
-- `Scan signs. Skip the ticket.`
-- `Parking signs, decoded`
+## Description
+Parking signs can be complicated. ParkSignal AI helps you read, check and remember them.
 
-## Promotional text (max 170, editable without a new build)
-`Point your camera at any parking sign and ParkSignal reads the rules for you —
-then reminds you before you have to move. All on-device. No account.`
+SCAN AND REVIEW
+Capture a sign or choose a photo. On-device text recognition suggests common parking rules. Check the original text and correct the days, hours and maximum stay before saving. Monthly schedules, holiday rules and other unsupported conditions stay marked for review.
 
-## What's New (version 1.0 release notes, max 4000)
-```
-Welcome to ParkSignal AI 1.0.
+SAVE YOUR SPOTS
+Keep spots, cars and sign photos together on a map. Saved-rule indicators help you see restrictions that may apply; they do not certify that parking is legal. Check every sign, curb marking and temporary restriction.
 
-• Scan any parking sign with your camera — the rules are read on-device in seconds.
-• A color-coded "parking signal" tells you at a glance whether you can park, and until when.
-• Save your spots on a map, each pin colored by its signal.
-• Set an alarm and get reminded before a restriction starts.
-• 100% private: no account, no tracking, nothing leaves your device. Optional iCloud sync keeps your own spots across your devices.
+MANAGE REMINDERS
+Enable parking reminders on this device, choose a lead time and view or cancel active alarms. Notifications require permission. System alarms are available on supported iOS versions. Delivery depends on your device, settings and permissions.
 
-Thanks for trying ParkSignal. Feedback is welcome via the Support link in Settings.
-```
+YOUR DATA
+Sign interpretation happens on the device, with no OpenAI key or app account. Apple Maps and address lookup use Apple's services. Optional iCloud availability lets your own saved records and photos synchronize through your private CloudKit database. Reminders and their permissions are device-specific. Sync may take time; check Settings for status.
 
-## Description (max 4000)
-```
-Parking signs shouldn't be a puzzle. ParkSignal AI reads them for you.
+Free to use. No ads or in-app purchases in v1.
 
-Point your camera at a parking sign and ParkSignal turns the fine print into a
-clear, color-coded answer: can I park here, and until when?
+ParkSignal is an organizational aid, not an authoritative parking-rules database. It cannot interpret every sign or guarantee against tickets or towing.
 
-• SCAN ANY SIGN
-Snap a photo of a parking sign. On-device text recognition reads it and pulls
-out the rules — days, times, limits, and type — in seconds.
+## What's New
+First release: on-device sign text recognition, editable suggested rules, saved parking spots and photos, car sessions and device-local reminders. Unsupported rules are clearly marked for review.
 
-• KNOW AT A GLANCE
-A simple color tells you what to do:
-  Green — safe to park
-  Red — illegal right now
-  Yellow — a restriction is starting soon
-  Blue — permit / ADA
-  Purple — metered / paid
-  Gray — unknown
+## Keywords (100 maximum)
+parking,signs,street,cleaning,meter,car,reminder,alarm,curb,scanner,parked,photo
 
-• SAVE YOUR SPOTS ON A MAP
-Every spot you scan becomes a pin, colored by its parking signal. Tap any pin to
-see the rules, your photos, and the address.
+## Categories and URLs
+- Navigation / Utilities
+- Privacy: https://shawn8989.github.io/ParkSignalAIBeta/legal/privacy.html
+- Support: https://shawn8989.github.io/ParkSignalAIBeta/legal/support.html
+- Copyright: © 2026 SOTech (owner to confirm)
 
-• NEVER GET A TICKET
-Set an alarm and ParkSignal reminds you before a restriction begins — with the
-lead time you choose — so you always have time to move the car.
+## App Privacy — owner verification before submission
+The app has no developer-operated backend, ad/tracking SDK, analytics SDK or OpenAI
+request. Local OCR and local-only processing are not data collection. iCloud does
+transmit private records/photos to Apple; Apple Maps and address lookup also use
+Apple services. Do not equate “private database” with “no network traffic.”
+Inventory these data flows against Apple's current App Privacy questions and the
+signed Release build. Confirm developer/partner access and retention before
+selecting the final categories; do not copy the old blanket “nothing leaves the
+device” answer. See https://developer.apple.com/app-store/app-privacy-details/.
+The bundled required-reason manifest documents UserDefaults use; it does not
+replace the App Store Connect privacy questionnaire.
 
-• PRIVATE BY DESIGN
-ParkSignal works entirely on your device. There are no accounts, no tracking,
-and nothing you scan is sent anywhere. Turn on iCloud to keep your own spots in
-sync across your devices — your data stays yours.
+## Age rating and review notes
+Complete Apple's current questionnaire from actual features (no UGC feed, chat,
+ads, gambling or mature content). Let App Store Connect assign the rating rather
+than hard-coding a historical rating.
 
-Made for drivers who are tired of squinting at confusing signs and gambling on a
-ticket. Scan it, know it, park with confidence.
-
-Note: ParkSignal helps you read and organize parking information; always confirm
-posted signs. It doesn't guarantee against citations.
-```
-
-## Keywords (max 100, comma-separated, no spaces after commas)
-`parking,parking sign,street parking,park,ticket,street cleaning,meter,car,reminder,alarm,curb,scanner`
-
-(97 chars — verify in App Store Connect.)
-
-## Categories
-- Primary: **Navigation**
-- Secondary: **Utilities**
-
-## URLs
-Host-ready pages are in `docs/legal/` — publish them (e.g. GitHub Pages) and paste the resulting URLs here.
-- Support URL (required): host `docs/legal/support.html` → e.g. `https://<user>.github.io/ParkSignalAIBeta/support.html`
-- Privacy Policy URL (required): host `docs/legal/privacy.html` → e.g. `https://<user>.github.io/ParkSignalAIBeta/privacy.html`
-- Marketing URL (optional): `https://<your-site>`
-
-> Both pages have `{{SUPPORT_EMAIL}}` and `{{EFFECTIVE_DATE}}` placeholders — fill them before hosting. Enabling GitHub Pages for this repo (Settings → Pages → deploy from `main` / `/docs`) serves everything under `docs/` at `https://<user>.github.io/ParkSignalAIBeta/legal/...`.
-
-## Age rating
-**4+** — no objectionable content. Questionnaire: None for all categories
-(no violence, profanity, mature/suggestive themes, gambling, etc.).
-
-## App Privacy ("App Privacy" section)
-v1 collects **no** data off the device.
-- **Data Not Collected** — select this. Nothing you scan, your location, photos,
-  or spots leave the device (Apple defines "collection" as transmitting off
-  device; ParkSignal does not).
-- This matches the bundled `PrivacyInfo.xcprivacy` (declares only the
-  UserDefaults required-reason API; no tracking, no collected data types).
-- If/when the optional cloud "Smart Scan" ships (a later version), the privacy
-  answers and manifest must be updated to declare what is sent.
-
-## Permissions (Info.plist purpose strings already set)
-- Camera — "ParkSignal uses the camera to scan parking signs and read the rules for you."
-- Location (When In Use) — "ParkSignal uses your location to show nearby parking spots and check the rules for where you are parked."
-- Photo Library — "ParkSignal needs access to your photos so you can pick an existing picture of a parking sign to analyze."
-- AlarmKit — "ParkSignal uses alarms to alert you before a parking restriction starts so you can move your car in time."
-
-## Build / capabilities notes for submission
-- **Device family: iPhone only** (`TARGETED_DEVICE_FAMILY = 1`) — no iPad
-  screenshots or iPad review needed.
-- **iCloud (CloudKit)** is enabled and shipping (foreground sync). Before the
-  App Store build, deploy the CloudKit schema Development → Production (see
-  `SUBMISSION_CHECKLIST.md`).
-- **Push Notifications** capability decision is still open (see
-  `SUBMISSION_CHECKLIST.md`). Push is only needed for real-time *background*
-  sync; without it, sync happens when the app is foregrounded. Whatever you
-  choose, the entitlements + provisioning must match the uploaded build.
-- Copyright: `© 2026 SOTech` (adjust).
+Suggested review notes: “No app login or API key is required. Scan interpretation
+is on-device. Enable reminders in Settings; unsupported sign conditions remain
+unresolved. iCloud uses the reviewer's own Apple Account if available.”
 
 ## Screenshots
-Provided under `docs/store/screenshots/` (6.9" iPhone, native 1320×2868):
-- `iphone69-1-dashboard.png`, `iphone69-2-map.png`, `iphone69-3-spotdetail.png` — ready to upload.
-- `iphone69-4-alerts-DEBUGrows.png` — **do not upload**: captured from a DEBUG
-  build, so it shows developer-only "Test" rows. Recapture from a Release build
-  (or the Alerts screen without debug rows) if you want a 4th screenshot; 1–3
-  clean shots already satisfy Apple's minimum.
-- iPhone-only, so **no iPad screenshots are required**.
+Use only images in screenshots/release/ that have been visually checked against
+the final Release candidate. Earlier screenshots in screenshots/ are historical:
+they include sample-city UI and one DEBUG alarm screen and must not be uploaded.
+The product targets iPhone; re-check Apple's current screenshot specifications
+for the final device family. Do not fabricate OCR photos or call demo data live.

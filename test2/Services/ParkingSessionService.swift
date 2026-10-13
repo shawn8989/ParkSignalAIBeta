@@ -25,7 +25,11 @@ struct ParkingSessionService {
     static let autoScheduleKey = "autoScheduleAlertOnPark"
 
     let context: ModelContext
-    var alerts: ParkingAlerts = SystemParkingAlerts()
+    var alerts: any ParkingAlerts
+    init(context: ModelContext, alerts: (any ParkingAlerts)? = nil) {
+        self.context = context
+        self.alerts = alerts ?? SystemParkingAlerts(context: context)
+    }
 
     static func moveAlertPrefix(carID: UUID) -> String {
         "nextRestriction.car.\(carID.uuidString).spot."
@@ -37,15 +41,22 @@ struct ParkingSessionService {
 
     /// Park `car` (or a car-less session when nil) at `spot`, replacing its previous session.
     /// - Parameter scheduleMoveAlert: nil follows the user's auto-schedule setting.
-    func park(_ car: Car?, at spot: ParkingSpot, scheduleMoveAlert: Bool? = nil, now: Date = Date()) async {
-        let replaced = openSessions().filter { belongs($0, to: car) }
+    @discardableResult
+    func park(_ car: Car?, at spot: ParkingSpot, scheduleMoveAlert: Bool? = nil, now: Date = Date()) async -> Bool {
+        let replaced: [ParkSession]
+        do { replaced = try openSessions().filter { belongs($0, to: car) } }
+        catch { AppIssueStore.shared.message = "Couldn’t read parking sessions: \(error.localizedDescription)"; return false }
         for s in replaced { s.endedAt = now }
 
         let session = ParkSession(spot: spot, startedAt: now, endedAt: nil, car: car)
         context.insert(session)
-        if !spot.parkSessions.contains(where: { $0.id == session.id }) { spot.parkSessions.append(session) }
-        if let car, !car.sessions.contains(where: { $0.id == session.id }) { car.sessions.append(session) }
-        try? context.save()
+        if !spot.parkSessionsList.contains(where: { $0.id == session.id }) { spot.parkSessionsList.append(session) }
+        if let car, !car.sessionsList.contains(where: { $0.id == session.id }) { car.sessionsList.append(session) }
+        do { try context.save() } catch {
+            context.rollback()
+            AppIssueStore.shared.message = "Couldn't save parking: \(error.localizedDescription)"
+            return false
+        }
 
         await cleanUpAlerts(after: replaced, keepingSpotID: spot.id)
         await alerts.scheduleSpotReminders(for: spot)
@@ -53,11 +64,13 @@ struct ParkingSessionService {
         if let car, wantsMoveAlert {
             await alerts.scheduleMoveAlert(for: car, at: spot)
         }
+        return true
     }
 
     /// End `car`'s open session (car-less sessions when nil), optionally only at `spot`.
     func end(_ car: Car?, at spot: ParkingSpot? = nil, now: Date = Date()) async {
-        let targets = openSessions().filter { s in
+        guard let open = readSessionsOrReport() else { return }
+        let targets = open.filter { s in
             belongs(s, to: car) && (spot == nil || s.spot?.id == spot?.id)
         }
         await finish(targets, now: now)
@@ -65,7 +78,8 @@ struct ParkingSessionService {
 
     /// End every open session at `spot`, whoever it belongs to.
     func endAll(at spot: ParkingSpot, now: Date = Date()) async {
-        await finish(openSessions().filter { $0.spot?.id == spot.id }, now: now)
+        guard let open = readSessionsOrReport() else { return }
+        await finish(open.filter { $0.spot?.id == spot.id }, now: now)
     }
 
     func scheduleMoveAlert(for car: Car, at spot: ParkingSpot) async {
@@ -78,23 +92,24 @@ struct ParkingSessionService {
 
     /// Next fire date of each car's pending "move your car" notification.
     static func pendingMoveAlertDates(forCarIDs carIDs: [UUID]) async -> [UUID: Date] {
-        let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        let alarms = await AlarmService.shared.allAlarms()
         var result: [UUID: Date] = [:]
-        for carID in carIDs {
-            let prefix = moveAlertPrefix(carID: carID)
-            let dates = pending
-                .filter { $0.identifier.hasPrefix(prefix) }
-                .compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() }
-            if let first = dates.min() { result[carID] = first }
+        for id in carIDs {
+            result[id] = alarms.filter { $0.carID == id }.map(\.endDate).min()
         }
         return result
     }
 
     // MARK: - Private
 
-    private func openSessions() -> [ParkSession] {
+    private func openSessions() throws -> [ParkSession] {
         let descriptor = FetchDescriptor<ParkSession>(predicate: #Predicate { $0.endedAt == nil })
-        return (try? context.fetch(descriptor)) ?? []
+        return try context.fetch(descriptor)
+    }
+
+    private func readSessionsOrReport() -> [ParkSession]? {
+        do { return try openSessions() }
+        catch { AppIssueStore.shared.message = "Couldn’t read parking sessions: \(error.localizedDescription)"; return nil }
     }
 
     private func belongs(_ session: ParkSession, to car: Car?) -> Bool {
@@ -105,7 +120,11 @@ struct ParkingSessionService {
     private func finish(_ sessions: [ParkSession], now: Date) async {
         guard !sessions.isEmpty else { return }
         for s in sessions { s.endedAt = now }
-        try? context.save()
+        do { try context.save() } catch {
+            context.rollback()
+            AppIssueStore.shared.message = "Couldn't save parking: \(error.localizedDescription)"
+            return
+        }
         await cleanUpAlerts(after: sessions, keepingSpotID: nil)
     }
 
@@ -119,7 +138,8 @@ struct ParkingSessionService {
         for id in carIDs {
             await alerts.cancelMoveAlerts(forCarID: id)
         }
-        let stillOccupied = Set(openSessions().compactMap { $0.spot?.id })
+        guard let open = readSessionsOrReport() else { return }
+        let stillOccupied = Set(open.compactMap { $0.spot?.id })
         for (id, spot) in spots where id != keepingSpotID && !stillOccupied.contains(id) {
             await alerts.cancelSpotReminders(for: spot)
         }
@@ -128,57 +148,20 @@ struct ParkingSessionService {
 
 /// Live implementation backed by `NotificationManager`, `UNUserNotificationCenter` and `AlarmService`.
 struct SystemParkingAlerts: ParkingAlerts {
+    let context: ModelContext
     func scheduleSpotReminders(for spot: ParkingSpot) async {
-        await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot)
+        await ReminderCoordinator.shared.reconcile(context: context)
     }
-
     func cancelSpotReminders(for spot: ParkingSpot) async {
-        await NotificationManager.shared.cancel(for: spot.restrictions, spot: spot)
+        await NotificationManager.shared.cancel(for: spot.restrictionsList, spot: spot)
+        await ReminderCoordinator.shared.reconcile(context: context)
     }
-
     func scheduleMoveAlert(for car: Car, at spot: ParkingSpot) async {
-        guard let start = spot.nextRestrictionDate() else { return }
-        // Replace, don't stack: drop this car's previous alert and countdown first.
-        await cancelMoveAlerts(forCarID: car.id)
-
-        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
-        let fireDate = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
-
-        if await NotificationManager.shared.requestAuthorizationIfNeeded() {
-            let content = UNMutableNotificationContent()
-            content.title = "Move your \(car.nickname)"
-            content.body = "Restriction at \(spot.location) starts soon."
-            content.sound = .default
-            content.interruptionLevel = .timeSensitive
-            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fireDate)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            let request = UNNotificationRequest(
-                identifier: ParkingSessionService.moveAlertID(carID: car.id, spotID: spot.id),
-                content: content,
-                trigger: trigger
-            )
-            try? await UNUserNotificationCenter.current().add(request)
-        }
-
-        let seconds = fireDate.timeIntervalSinceNow
-        if seconds > 1 {
-            _ = await AlarmService.shared.requestAuthorization()
-            _ = try? await AlarmService.shared.scheduleCountdown(
-                seconds: seconds,
-                title: LocalizedStringResource("Restriction Starts"),
-                carID: car.id,
-                spotID: spot.id
-            )
-        }
+        await ReminderCoordinator.shared.enable(context: context)
+        await ReminderCoordinator.shared.resumeCancelled(context: context)
     }
-
     func cancelMoveAlerts(forCarID carID: UUID) async {
-        let center = UNUserNotificationCenter.current()
-        let prefix = ParkingSessionService.moveAlertPrefix(carID: carID)
-        let ids = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
-        if !ids.isEmpty {
-            center.removePendingNotificationRequests(withIdentifiers: ids)
-        }
+        await ReminderCoordinator.shared.cancel(carID: carID)
         await AlarmService.shared.cancelAlarms(forCarID: carID)
     }
 }

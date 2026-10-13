@@ -49,7 +49,7 @@ struct ParkingSessionServiceTests {
         let container = try ModelContainer(
             for: User.self, Car.self, ParkingSpot.self, Restriction.self,
             ParkSession.self, SignScan.self, CurrentParking.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
         let spy = SpyParkingAlerts()
         let service = ParkingSessionService(context: container.mainContext, alerts: spy)

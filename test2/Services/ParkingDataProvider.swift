@@ -59,6 +59,7 @@ final class ParkingDataProvider: ObservableObject {
 
     /// Detects the city for the provided location and loads a realistic sample dataset once.
     func bootstrapIfNeeded(currentLocation: CLLocationCoordinate2D) async {
+        #if DEBUG
         // Determine which city this coordinate belongs to (simple bounding boxes for demo)
         let key: String?
         if Self.isInSanFrancisco(currentLocation) { key = "sf" }
@@ -84,6 +85,10 @@ final class ParkingDataProvider: ObservableObject {
             matchedCity = nil
             zones = []
         }
+        #else
+        matchedCity = nil
+        zones = []
+        #endif
     }
 
     /// Returns realistic restrictions near the given coordinate using the preloaded dataset.

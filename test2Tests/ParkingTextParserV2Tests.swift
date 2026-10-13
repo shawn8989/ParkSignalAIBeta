@@ -25,7 +25,7 @@ struct ParkingTextParserV2Tests {
         #expect(r?.type == .no_parking)
         #expect(r?.daysOfWeek == [1, 2, 3, 4, 5])
         #expect(r?.startTime == "08:00")
-        #expect(r?.needsReview == true)
+        #expect(r?.requiresReview == false)
     }
 
     @Test("'except Sat Sun' → Mon–Fri")
@@ -43,7 +43,7 @@ struct ParkingTextParserV2Tests {
         let r = first("2 Hour Parking 8AM-6PM Sundays and Holidays Excepted")
         #expect(r?.daysOfWeek == [1, 2, 3, 4, 5, 6])
         #expect(r?.exceptHolidays == true)
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
     }
 
     @Test("'Mon-Fri ... except holidays' keeps Mon–Fri and sets the holiday flag")
@@ -86,25 +86,25 @@ struct ParkingTextParserV2Tests {
         #expect(rs.map(\.type) == [.no_parking, .no_parking])
         #expect(rs.map(\.startTime) == ["07:00", "16:00"])
         #expect(rs.map(\.endTime) == ["09:00", "18:00"])
-        #expect(rs.allSatisfy { $0.needsReview == true })
+        #expect(rs.allSatisfy { !$0.requiresReview })
     }
 
     // MARK: - Spelled-out durations
 
-    @Test("'ONE HOUR PARKING' → 60 min metered")
+    @Test("'ONE HOUR PARKING' → 60 min limit")
     func spelledOneHour() {
         let r = first("One Hour Parking")
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
         #expect(r?.durationMinutes == 60)
     }
 
-    @Test("'TWO HOUR PARKING 9AM-6PM' → metered window, no duration")
+    @Test("'TWO HOUR PARKING 9AM-6PM' → time-limited window and duration")
     func spelledTwoHourWithWindow() {
         let r = first("Two Hour Parking 9AM-6PM")
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
         #expect(r?.startTime == "09:00")
         #expect(r?.endTime == "18:00")
-        #expect(r?.durationMinutes == nil)
+        #expect(r?.durationMinutes == 120)
     }
 
     @Test("'30 MIN' → 30 min")
@@ -150,7 +150,7 @@ struct ParkingTextParserV2Tests {
 
     @Test("A normal single-window sign is not flagged for review")
     func normalNotFlagged() {
-        #expect(first("No Parking 8AM-10AM Mon")?.needsReview == nil)
+        #expect(first("No Parking 8AM-10AM Mon")?.requiresReview == false)
     }
 }
 #endif

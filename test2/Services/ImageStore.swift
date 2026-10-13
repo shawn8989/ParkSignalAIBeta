@@ -15,7 +15,10 @@ enum ImageStore {
             throw NSError(domain: "ImageStore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode image"])
         }
         try data.write(to: url(for: filename), options: .atomic)
-        if let context { upsertBlob(filename: filename, data: data, in: context) }
+        if let context {
+            do { try upsertBlob(filename: filename, data: data, in: context) }
+            catch { try? FileManager.default.removeItem(at: url(for: filename)); context.rollback(); throw error }
+        }
         return filename
     }
 
@@ -28,12 +31,14 @@ enum ImageStore {
         return UIImage(data: data)
     }
 
-    static func deleteImage(named filename: String, context: ModelContext? = nil) {
-        try? FileManager.default.removeItem(at: url(for: filename))
-        guard let context else { return }
-        if let blob = blob(filename: filename, in: context) {
-            context.delete(blob)
-            try? context.save()
+    static func deleteImage(named filename: String, context: ModelContext? = nil) throws {
+        if let context {
+            let descriptor = FetchDescriptor<PhotoBlob>(predicate: #Predicate { $0.filename == filename })
+            for item in try context.fetch(descriptor) { context.delete(item) }
+            do { try context.save() } catch { context.rollback(); throw error }
+        }
+        if FileManager.default.fileExists(atPath: url(for: filename).path) {
+            try FileManager.default.removeItem(at: url(for: filename))
         }
     }
 
@@ -41,15 +46,33 @@ enum ImageStore {
         documentsURL().appendingPathComponent(filename)
     }
 
+    /// Populate newly introduced cloud blobs for photos saved by older builds.
+    /// Only referenced local photos are imported; no files or cloud records are deleted.
+    static func backfillReferencedPhotos(in context: ModelContext) throws {
+        let scans = try context.fetch(FetchDescriptor<SignScan>())
+        let spots = try context.fetch(FetchDescriptor<ParkingSpot>())
+        let names = Set(scans.flatMap { $0.photoFilenames + $0.additionalPhotoFilenames + [$0.photoFilename].compactMap { $0 } }
+            + spots.flatMap { $0.streetPhotoFilenames + [$0.lastScanPhotoFilename].compactMap { $0 } })
+        let existing = Set(try context.fetch(FetchDescriptor<PhotoBlob>()).map(\.filename))
+        var added = false
+        for name in names.subtracting(existing) {
+            if let data = try? Data(contentsOf: url(for: name)) {
+                context.insert(PhotoBlob(filename: name, data: data))
+                added = true
+            }
+        }
+        if added { try context.save() }
+    }
+
     // MARK: - Synced blob helpers
 
-    private static func upsertBlob(filename: String, data: Data, in context: ModelContext) {
+    private static func upsertBlob(filename: String, data: Data, in context: ModelContext) throws {
         if let existing = blob(filename: filename, in: context) {
             existing.data = data
         } else {
             context.insert(PhotoBlob(filename: filename, data: data))
         }
-        try? context.save()
+        try context.save()
     }
 
     private static func blob(filename: String, in context: ModelContext) -> PhotoBlob? {

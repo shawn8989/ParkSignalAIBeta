@@ -7,6 +7,7 @@ enum RestrictionType: String, Codable, Hashable, CaseIterable {
     case noParking = "No Parking"
     case streetCleaning = "Street Cleaning"
     case metered = "Metered"
+    case timeLimited = "Time Limit"
     case permit = "Permit"
     case other = "Other"
     var displayName: String { rawValue }
@@ -23,7 +24,11 @@ final class User {
     var registeredAt: Date = Date.now
 
     @Relationship(deleteRule: .cascade, inverse: \Car.owner)
-    var cars: [Car] = []
+    var cars: [Car]? = []
+    var carsList: [Car] {
+        get { cars ?? [] }
+        set { cars = newValue }
+    }
 
     init(id: UUID = UUID(), username: String, email: String, passwordHash: String, registeredAt: Date = Date.now) {
         self.id = id
@@ -47,7 +52,11 @@ final class Car {
     @Relationship var owner: User?
 
     @Relationship(deleteRule: .cascade, inverse: \ParkSession.car)
-    var sessions: [ParkSession] = []
+    var sessions: [ParkSession]? = []
+    var sessionsList: [ParkSession] {
+        get { sessions ?? [] }
+        set { sessions = newValue }
+    }
 
     init(
         id: UUID = UUID(),
@@ -64,7 +73,7 @@ final class Car {
         self.colorHex = colorHex
         self.iconName = iconName
         self.owner = owner
-        self.sessions = sessions
+        self.sessionsList = sessions
     }
 }
 
@@ -76,15 +85,28 @@ final class ParkingSpot {
     var location: String = ""
     var latitude: Double = 0
     var longitude: Double = 0
+    var timeZoneIdentifier: String = ""
     var streetSide: String = "" // "left" or "right" or other
     @Relationship(deleteRule: .cascade, inverse: \Restriction.spot)
-    var restrictions: [Restriction] = []
+    var restrictions: [Restriction]? = []
+    var restrictionsList: [Restriction] {
+        get { restrictions ?? [] }
+        set { restrictions = newValue }
+    }
 
     @Relationship(deleteRule: .cascade, inverse: \SignScan.spot)
-    var signScans: [SignScan] = []
+    var signScans: [SignScan]? = []
+    var signScansList: [SignScan] {
+        get { signScans ?? [] }
+        set { signScans = newValue }
+    }
 
     @Relationship(deleteRule: .cascade, inverse: \ParkSession.spot)
-    var parkSessions: [ParkSession] = []
+    var parkSessions: [ParkSession]? = []
+    var parkSessionsList: [ParkSession] {
+        get { parkSessions ?? [] }
+        set { parkSessions = newValue }
+    }
 
     var lastScanText: String?
     var lastScanPhotoFilename: String?
@@ -111,8 +133,9 @@ final class ParkingSpot {
         self.location = location
         self.latitude = latitude
         self.longitude = longitude
+        self.timeZoneIdentifier = TimeZone.current.identifier
         self.streetSide = streetSide
-        self.restrictions = restrictions
+        self.restrictionsList = restrictions
         self.lastScanText = lastScanText
         self.lastScanPhotoFilename = lastScanPhotoFilename
         self.lastScanAt = lastScanAt
@@ -121,9 +144,9 @@ final class ParkingSpot {
 
     // Convenience helpers for managing scans and photos
     func attach(scan: SignScan) {
-        if !self.signScans.contains(where: { $0.id == scan.id }) {
+        if !self.signScansList.contains(where: { $0.id == scan.id }) {
             scan.spot = self
-            self.signScans.append(scan)
+            self.signScansList.append(scan)
         } else {
             scan.spot = self
         }
@@ -146,9 +169,9 @@ final class ParkingSpot {
 
     func isCurrentlyParked(for car: Car?) -> Bool {
         if let car {
-            return parkSessions.contains { $0.car?.id == car.id && $0.endedAt == nil }
+            return parkSessionsList.contains { $0.car?.id == car.id && $0.endedAt == nil }
         } else {
-            return parkSessions.contains { $0.endedAt == nil }
+            return parkSessionsList.contains { $0.endedAt == nil }
         }
     }
 }
@@ -173,6 +196,9 @@ final class Restriction {
             daysMask = clamped.reduce(0) { $0 | (1 << $1) }
         }
     }
+    var needsReview: Bool = true
+    var reviewReasons: [String] = []
+    var durationMinutes: Int?
     var sourceUser: UUID = UUID() // the User.id that added this restriction
     var signPhotoFilename: String? // placeholder for image storage
     var ocrText: String? // AI-detected text from sign
@@ -190,7 +216,10 @@ final class Restriction {
         signPhotoFilename: String? = nil,
         ocrText: String? = nil,
         spot: ParkingSpot? = nil,
-        scan: SignScan? = nil
+        scan: SignScan? = nil,
+        needsReview: Bool = false,
+        reviewReasons: [String] = [],
+        durationMinutes: Int? = nil
     ) {
         self.id = id
         self.type = type
@@ -203,6 +232,9 @@ final class Restriction {
         self.ocrText = ocrText
         self.spot = spot
         self.scan = scan
+        self.needsReview = needsReview
+        self.reviewReasons = reviewReasons
+        self.durationMinutes = durationMinutes
     }
     
     var timeDescription: String {
@@ -266,6 +298,7 @@ final class SignScan {
     var address: String?
     var status: String = "incomplete"
     var signalState: String? = nil
+    var needsReview: Bool = true
 
     // Segment metadata (curb segment assignment)
     var segmentCenterLat: Double?
@@ -274,7 +307,11 @@ final class SignScan {
     var segmentStreetSide: String?
     var segmentDirection: Double? // degrees 0...360
 
-    @Relationship(deleteRule: .nullify, inverse: \Restriction.scan) var restrictions: [Restriction] = []
+    @Relationship(deleteRule: .nullify, inverse: \Restriction.scan) var restrictions: [Restriction]? = []
+    var restrictionsList: [Restriction] {
+        get { restrictions ?? [] }
+        set { restrictions = newValue }
+    }
 
     // Analysis results
     var aiAnalysisText: String?
@@ -340,7 +377,7 @@ final class SignScan {
         self.aiAnalysisText = aiAnalysisText
         self.localAnalysisText = localAnalysisText
         self.analyzedAt = analyzedAt
-        self.restrictions = restrictions
+        self.restrictionsList = restrictions
         self.sourceUser = sourceUser
         self.spot = spot
     }

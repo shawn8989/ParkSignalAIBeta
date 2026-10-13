@@ -1,81 +1,58 @@
-# ParkSignal AI 🚦
+# ParkSignal AI
 
-**Read any parking sign in a tap. Know if you can park. Get an alarm before you have to move.**
+An iPhone parking-sign reader, organizer and reminder. Free v1 uses Apple Vision
+OCR and an on-device parser; there is no OpenAI key, app account, ads or purchase.
 
-ParkSignal AI is an iOS app that reads parking signs with your camera and turns
-them into a clear, color-coded "can I park here?" signal — then saves the spot to
-a map and reminds you before a restriction starts.
+Capture a sign, compare the suggested rules with the original and confirm them
+before saving. Unsupported monthly, seasonal, holiday and vehicle-specific rules
+remain marked for review and cannot produce a clear parking signal or automatic
+reminders. A color indicator describes saved rules, not legal permission to park.
 
-It is **local-first and private**: v1 interprets signs **entirely on-device**
-(Apple Vision text recognition + an on-device rules parser). There are no
-accounts, and nothing you scan leaves your device. Optional iCloud sync keeps
-your own spots in step across your devices.
+## Development
 
----
+Open `test2.xcodeproj`, scheme `test2`, in Xcode 26.6 or a compatible newer Xcode.
+Deployment target: iOS 18.6. Module: `ParkSignal_AI`. Product: `ParkSignal AI`.
 
-## Features
-
-- **📸 Scan a sign** — photograph a parking sign; on-device OCR reads the text and
-  an on-device parser extracts the rules (days, time windows, limits, type).
-- **🎨 Parking signal** — a color tells you at a glance:
-  - 🟢 Safe to park · 🔴 Illegal now · 🟡 Restriction soon · 🔵 Permit/ADA ·
-    🟣 Metered/paid · ⚪ Unknown
-- **🗺️ Map of your spots** — each saved spot is a pin colored by its signal; tap
-  for rules, photos, and address.
-- **⏰ Alarms & reminders** — schedule an alert a chosen lead time before a
-  restriction begins (AlarmKit on iOS 26, local notifications otherwise).
-- **🚗 Cars & sessions** — track where each car is parked.
-- **☁️ Optional iCloud sync** — your data, synced across your own devices via the
-  CloudKit private database. No login; iCloud is the identity.
-
-## Tech stack
-
-- **SwiftUI** app (iOS 18.6+), MVVM-ish view models
-- **SwiftData** for local persistence (+ optional CloudKit sync)
-- **Apple Vision / VisionKit** for on-device OCR
-- **CoreLocation + MapKit** for spots and the map
-- **AlarmKit** (iOS 26) with a UserNotifications fallback
-
-No third-party services and no network calls to interpret signs in v1 — it all
-runs on the device.
-
-## Project structure
-
-```
-test2/
-├── App/          # App entry (ParkMateApp) and root navigation
-├── Models/       # SwiftData @Model types (ParkingSpot, Restriction, SignScan, …)
-├── Services/     # OCR, on-device parser, location, geocoding, alarms, notifications
-├── Utilities/    # Signal engine, date/geometry helpers, LocalIdentity
-└── Views/        # Home, Map, Cars, Scan, Spots, Alerts, Settings, Onboarding
+```sh
+xcodebuild test -project test2.xcodeproj -scheme test2 \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -only-testing:test2Tests CODE_SIGNING_ALLOWED=NO
 ```
 
-(The Xcode target is named `test2` for historical reasons; the product is
-"ParkSignal AI", module `ParkSignal_AI`.)
+CI runs unit tests and a Release build. The sign corpus checks supported meanings
+and explicit review handling for unsupported signs; it is not a claim of accuracy
+on every photograph or city. Simulator tests also exercise disk-store migration,
+photo rehydration, multiple parking sessions, reminder reconciliation and DST.
 
-## Building
+## Storage and reminders
 
-Open `test2.xcodeproj` in Xcode and run the `test2` scheme on an iOS 18+
-simulator or device. Unit tests: `⌘U` (or `xcodebuild test -scheme test2
--only-testing:test2Tests`). CI builds and runs the unit tests on every PR.
+SwiftData stores spots, cars, scans, restrictions, sessions and photo blobs locally.
+CloudKit is configured for the user's private `iCloud.com.SOTech.ParkSignalAI`
+database when available. CloudKit relationships are optional; convenience lists
+keep UI access straightforward while preserving existing stored field names.
+Settings reports local-only operation and iCloud availability/transfer status.
+A successful local save does not prove a successful cloud upload.
 
-To enable iCloud sync on a device, add the **iCloud (CloudKit)** and **Push
-Notifications** capabilities to the `test2` target with the container
-`iCloud.com.SOTech.ParkSignalAI`, and sign into iCloud on the device.
+`ParkingSessionService` owns parking-session changes. `ScanReviewService` replaces
+only the confirmed scan's rules. `ReminderCoordinator` derives device-local
+reminders from active sessions, preserves manual cancellation, and reschedules
+when saved data or lead time changes. Each device must enable its own reminders.
+Photos use local files as a cache and `PhotoBlob` as the synced source.
 
-## Roadmap
+## Release
 
-- **Smart Scan (premium)** — optional higher-accuracy cloud interpretation via a
-  key-protected proxy, behind a subscription. (v1 is on-device only.)
-- Broader/authoritative city rule data
-- Richer history and multi-car workflows
-- App Store launch
+The release candidate is not a submitted or approved app. See
+[the submission checklist](docs/store/SUBMISSION_CHECKLIST.md),
+[status and evidence](docs/store/STATUS.md) and [listing draft](docs/store/APPSTORE.md).
+Authenticated two-device sync, a physical-device scan/alarm pass and the signed
+TestFlight build remain release gates. Do not reset a user's store to resolve a
+migration error. Apple-account, signing and App Store actions belong to the owner.
 
-## Privacy
+[Privacy policy](PRIVACY.md) · [Support](https://shawn8989.github.io/ParkSignalAIBeta/legal/support.html)
 
-See [PRIVACY.md](PRIVACY.md). Short version: no tracking, no analytics, and no
-data leaves your device in v1.
+## Later
 
-## License
-
-TBD (MIT recommended).
+Evaluate opt-in cloud Smart Scan only if it materially improves a measured sign
+benchmark. It would require a server-held key, consent, rate limits, usage
+accounting and StoreKit purchases. Scan packs are a pricing experiment for later;
+core reminders and manual corrections remain free. No such service ships in v1.

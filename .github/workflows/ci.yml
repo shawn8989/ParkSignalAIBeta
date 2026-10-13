@@ -42,11 +42,20 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -configuration Debug \
             -only-testing:test2Tests \
-            CODE_SIGNING_ALLOWED=NO \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES \
             -resultBundlePath TestResults.xcresult
         # Note: the UI-test target (test2UITests) is Xcode boilerplate and is
         # excluded here — it hangs on GitHub runners (instruments lockdown
         # timeout). Unit tests cover the real logic.
+
+      - name: Release build
+        run: |
+          xcodebuild build -quiet \
+            -project test2.xcodeproj -scheme test2 \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
 
       - name: Parser corpus report
         if: always()

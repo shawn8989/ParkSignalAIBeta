@@ -84,27 +84,27 @@ struct ParkingTextParserTests {
 
     // MARK: - Duration limits
 
-    @Test("Hour limit with a window is metered, window preferred")
+    @Test("Hour limit preserves both duration and active window")
     func hourLimitWithWindow() {
         let r = first("2 HR PARKING 9AM-6PM MON-FRI")
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
         #expect(r?.daysOfWeek == [1, 2, 3, 4, 5])
         #expect(r?.startTime == "09:00")
         #expect(r?.endTime == "18:00")
-        #expect(r?.durationMinutes == nil)
-    }
-
-    @Test("Hour-only limit is metered with durationMinutes")
-    func hourOnlyLimit() {
-        let r = first("2 HOUR PARKING")
-        #expect(r?.type == .metered)
         #expect(r?.durationMinutes == 120)
     }
 
-    @Test("Minute-only limit is metered with durationMinutes")
+    @Test("Hour-only limit retains durationMinutes")
+    func hourOnlyLimit() {
+        let r = first("2 HOUR PARKING")
+        #expect(r?.type == .time_limited)
+        #expect(r?.durationMinutes == 120)
+    }
+
+    @Test("Minute-only limit retains durationMinutes")
     func minuteOnlyLimit() {
         let r = first("90 MINUTE PARKING")
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
         #expect(r?.durationMinutes == 90)
     }
 

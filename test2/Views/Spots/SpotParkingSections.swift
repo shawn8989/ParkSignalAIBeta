@@ -55,7 +55,7 @@ final class SpotParkingModel {
     }
 
     func refresh(for spot: ParkingSpot) {
-        let carIDs = spot.parkSessions.filter { $0.endedAt == nil }.compactMap { $0.car?.id }
+        let carIDs = spot.parkSessionsList.filter { $0.endedAt == nil }.compactMap { $0.car?.id }
         Task {
             pendingAlerts = await ParkingSessionService.pendingMoveAlertDates(forCarIDs: carIDs)
         }
@@ -76,7 +76,7 @@ struct SpotParkingSections: View {
     }
 
     private var activeCar: Car? {
-        spot.parkSessions.first(where: { $0.endedAt == nil && $0.car != nil })?.car
+        spot.parkSessionsList.first(where: { $0.endedAt == nil && $0.car != nil })?.car
     }
 
     private var carSelectionBinding: Binding<UUID?> {
@@ -153,7 +153,7 @@ struct SpotParkingSections: View {
             }
 
             // Scheduled alerts for currently parked cars at this spot
-            let activeCarSessions = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
+            let activeCarSessions = spot.parkSessionsList.filter { $0.endedAt == nil && $0.car != nil }
             if activeCarSessions.isEmpty {
                 Text("No cars parked here.").foregroundColor(.secondary)
             } else {
@@ -206,7 +206,7 @@ struct SpotParkingSections: View {
     private func upcomingRestrictions(limit: Int = 3, from now: Date = Date()) -> [(Restriction, Date)] {
         let cal = Calendar.current
         var results: [(Restriction, Date)] = []
-        for r in spot.restrictions {
+        for r in spot.restrictionsList {
             // Skip if days not set; we can't predict windows
             let days = r.daysOfWeek
             if days.isEmpty { continue }
@@ -230,7 +230,7 @@ struct SpotParkingSections: View {
     }
 
     private func activeSession(for carID: UUID) -> ParkSession? {
-        spot.parkSessions.first(where: { session in
+        spot.parkSessionsList.first(where: { session in
             session.endedAt == nil && session.car?.id == carID
         })
     }

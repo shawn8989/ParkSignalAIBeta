@@ -60,7 +60,7 @@ struct ParkingTextParserMoreTests {
     @Test("Duration with no space ('3HR PARKING') is metered with minutes")
     func durationNoSpace() {
         let r = first("3HR PARKING")
-        #expect(r?.type == .metered)
+        #expect(r?.type == .time_limited)
         #expect(r?.durationMinutes == 180)
     }
 

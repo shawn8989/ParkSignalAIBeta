@@ -24,7 +24,7 @@ struct SignCorpus: Decodable {
         let ocrText: String?
         let image: String?
         let expected: [Rule]
-        let knownFailing: Bool
+        let requiresReview: Bool
         let notes: String?
     }
 
@@ -40,7 +40,7 @@ struct SignCorpus: Decodable {
 }
 
 /// Runs the on-device parser over the whole corpus, prints per-sign results and overall
-/// accuracy, and fails on any sign not marked `knownFailing` that no longer parses correctly.
+/// accuracy, and fails on any incorrect supported parse or unflagged unsupported sign.
 @MainActor
 @Suite("Parser accuracy corpus")
 struct ParserCorpusTests {
@@ -110,12 +110,12 @@ struct ParserCorpusTests {
 
         var passed = 0
         var regressions: [String] = []
-        var nowPassing: [String] = []
         var report: [String] = []
 
         for entry in corpus.entries {
             let text = try await ocrText(for: entry)
-            let actual = parser.analyze(ocrText: text).restrictions.map {
+            let analysis = parser.analyze(ocrText: text)
+            let actual = analysis.restrictions.map {
                 Normalized(type: $0.type, days: $0.daysOfWeek, start: $0.startTime, end: $0.endTime,
                            duration: $0.durationMinutes, holidays: $0.exceptHolidays)
             }
@@ -123,21 +123,18 @@ struct ParserCorpusTests {
                 Normalized(type: $0.type, days: $0.days, start: $0.start, end: $0.end,
                            duration: $0.durationMinutes, holidays: $0.exceptHolidays)
             }
-            let ok = matches(expected: expected, actual: actual)
-            if ok { passed += 1 }
-            if !ok && !entry.knownFailing { regressions.append(entry.id) }
-            if ok && entry.knownFailing { nowPassing.append(entry.id) }
-
-            let flag = ok ? "PASS" : (entry.knownFailing ? "KNOWN" : "FAIL")
+            let correct = matches(expected: expected, actual: actual)
+            let safelyUnresolved = !analysis.restrictions.isEmpty && analysis.restrictions.allSatisfy(\.requiresReview)
+                && ParkingSignalEvaluator.status(for: analysis) == .gray
+            let ok = entry.requiresReview ? safelyUnresolved : (correct && !analysis.restrictions.contains(where: \.requiresReview))
+            if ok { passed += 1 } else { regressions.append(entry.id) }
+            let flag = ok ? (entry.requiresReview ? "REVIEW" : "PASS") : "FAIL"
             report.append("CORPUS|\(flag)|\(entry.id)|expected: \(expected.map(\.description).joined(separator: "; "))|actual: \(actual.map(\.description).joined(separator: "; "))")
         }
 
         let total = corpus.entries.count
         let pct = total == 0 ? 0 : Double(passed) / Double(total) * 100
-        report.append(String(format: "CORPUS|SUMMARY|%d/%d signs parsed correctly (%.1f%%)", passed, total, pct))
-        if !nowPassing.isEmpty {
-            report.append("CORPUS|NOW-PASSING|mark these knownFailing=false: \(nowPassing.joined(separator: ", "))")
-        }
+        report.append(String(format: "CORPUS|SUMMARY|%d/%d signs correct or explicitly unresolved (%.1f%%)", passed, total, pct))
         let text = report.joined(separator: "\n")
         print(text)
         // CI sets TEST_RUNNER_CORPUS_REPORT_PATH; xcodebuild strips the prefix for the test process.

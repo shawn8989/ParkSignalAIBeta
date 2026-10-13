@@ -5,9 +5,10 @@ extension ParkingSpot {
     /// - Parameter now: Reference time (defaults to current date).
     /// - Returns: The next start `Date` strictly in the future, or nil if none found.
     func nextRestrictionDate(from now: Date = Date()) -> Date? {
-        let cal = Calendar.current
+        var cal = Calendar.current
+        if let zone = TimeZone(identifier: timeZoneIdentifier) { cal.timeZone = zone }
         var best: Date? = nil
-        for r in restrictions {
+        for r in restrictionsList where !r.needsReview {
             // Empty days = applies every day (matches isActive semantics).
             let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
             let hour = cal.component(.hour, from: r.startTime)
@@ -22,8 +23,9 @@ extension ParkingSpot {
     /// Whether a blocking restriction (No Parking / Street Cleaning) is active right now for this spot.
     /// - Parameter now: Reference time (defaults to current date).
     func isRestrictedNow(at now: Date = Date()) -> Bool {
-        let cal = Calendar.current
-        for r in restrictions where r.type == .noParking || r.type == .streetCleaning {
+        var cal = Calendar.current
+        if let zone = TimeZone(identifier: timeZoneIdentifier) { cal.timeZone = zone }
+        for r in restrictionsList where !r.needsReview && (r.type == .noParking || r.type == .streetCleaning) {
             let sh = cal.component(.hour, from: r.startTime)
             let sm = cal.component(.minute, from: r.startTime)
             let eh = cal.component(.hour, from: r.endTime)

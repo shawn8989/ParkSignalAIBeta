@@ -154,7 +154,7 @@ struct DashboardView: View {
                                 VStack(alignment: .leading) {
                                     Text(spot.location)
                                         .font(.headline)
-                                    Text("\(spot.restrictions.count) restriction(s)")
+                                    Text("\(spot.restrictionsList.count) restriction(s)")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
 
@@ -209,8 +209,8 @@ struct DashboardView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
-                                context.delete(spot)
-                                try? context.save()
+                                do { try ParkingDataDeletion(context: context).delete(spots: [spot]) }
+                                catch { AppIssueStore.shared.message = "Couldn’t delete the spot: \(error.localizedDescription)" }
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -349,7 +349,7 @@ struct DashboardView: View {
             for spot in MockData.parkingSpots {
                 context.insert(spot)
             }
-            try? context.save()
+            context.saveOrReport()
         }
         #endif
         hasSeeded = true
@@ -444,11 +444,8 @@ struct DashboardView: View {
 
     private func deleteSpots(at offsets: IndexSet) {
         let targets = offsets.map { spots[$0] }
-        for spot in targets {
-            context.delete(spot)
-        }
         do {
-            try context.save()
+            try ParkingDataDeletion(context: context).delete(spots: targets)
         } catch {
             locationAlertMessage = "Failed to delete spot(s): \(error.localizedDescription)"
             showingLocationAlert = true
