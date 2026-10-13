@@ -415,30 +415,13 @@ struct CarListView: View {
     }
 
     private func assign(_ car: Car, to spot: ParkingSpot) {
-        // End any existing active session and start a new one at the given spot using centralized API
-        let now = Date()
-        let _ = car.startParking(at: spot, now: now, in: context)
-        try? context.save()
-
-        // Remember last used car for quick actions
         saveLastUsed(car)
-
-        // Schedule weekly notifications for this spot's restrictions (centralized policy)
-        Task { await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot) }
+        Task { await ParkingSessionService(context: context).park(car, at: spot) }
     }
 
     private func endParking(for car: Car) {
-        car.endCurrentParking(at: Date())
-        try? context.save()
         saveLastUsed(car)
-
-        // Cancel any previously scheduled weekly notifications for the last spot of this car (best-effort)
-        if car.activeSession?.spot != nil { // if still active (shouldn't be), skip cancel
-        } else {
-            // We don't know the last spot directly; as a simple approach, cancel for all spots with active sessions ended now
-            // (In a future refactor, track CurrentParking to know the last spot directly.)
-            // For now, this is a no-op because schedule uses per-restriction identifiers; cancel will be called when moving/starting elsewhere.
-        }
+        Task { await ParkingSessionService(context: context).end(car) }
     }
 
     private func elapsedString(since date: Date) -> String {
@@ -511,67 +494,6 @@ struct CarListView: View {
             return "\(minutes)m\(secs > 0 ? " \(secs)s" : "")"
         } else {
             return "now"
-        }
-    }
-
-    private func scheduleNextRestrictionNotification(for car: Car, at spot: ParkingSpot) {
-        guard let start = nextRestrictionDate(for: spot) else { return }
-        // Fire the alert the user's lead time BEFORE the restriction starts (not at start).
-        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
-        let next = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
-        let center = UNUserNotificationCenter.current()
-        let id = "nextRestriction.car.\(car.id.uuidString).spot.\(spot.id.uuidString)"
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-
-        let schedule: () -> Void = {
-            let content = UNMutableNotificationContent()
-            content.title = "Move your \(car.nickname)"
-            content.body = "Restriction at \(spot.location) starts soon."
-            content.sound = .default
-            if #available(iOS 15.0, *) {
-                content.interruptionLevel = .timeSensitive
-            }
-            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: next)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-            center.add(req, withCompletionHandler: nil)
-        }
-
-        center.getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .authorized, .provisional, .ephemeral:
-                schedule()
-            case .denied, .notDetermined:
-                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-                    if granted { schedule() }
-                }
-            @unknown default:
-                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-                    if granted { schedule() }
-                }
-            }
-        }
-
-        // Also attempt to schedule an AlarmKit countdown (if supported) with metadata
-        let seconds = next.timeIntervalSinceNow
-        if seconds > 1 {
-            Task {
-                _ = await AlarmService.shared.requestAuthorization()
-                do {
-                    let _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("Restriction Starts"), carID: car.id, spotID: spot.id)
-                } catch { }
-            }
-        }
-    }
-
-    private func cancelNextRestrictionNotification(for car: Car) {
-        // Scheduled ids are "nextRestriction.car.<carID>.spot.<spotID>", so match by prefix
-        // (the old exact id without the ".spot." suffix never matched anything).
-        let center = UNUserNotificationCenter.current()
-        let prefix = "nextRestriction.car.\(car.id.uuidString).spot."
-        center.getPendingNotificationRequests { reqs in
-            let ids = reqs.map { $0.identifier }.filter { $0.hasPrefix(prefix) }
-            if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
         }
     }
 

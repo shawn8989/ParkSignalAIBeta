@@ -19,14 +19,9 @@ struct ParkingSpotDetailView: View {
         startTime: Date(),
         endTime: Date(),
         daysOfWeek: [],
-        sourceUser: UUID()
+        sourceUser: LocalIdentity.userID
     )
     @State private var showEditSpot = false
-    @State private var showCarPickerSheet = false
-    @State private var cityRestrictions: [CityRestriction] = []
-    @State private var loadingCityData = false
-    @State private var cityDataError: String? = nil
-    @State private var matchedCityName: String? = nil
 
     // Scan flow state
     @State private var showCamera = false
@@ -50,8 +45,6 @@ struct ParkingSpotDetailView: View {
     @State private var showMapSheet: Bool = false
     @State private var mapRegion: MKCoordinateRegion = MKCoordinateRegion()
     @State private var mapPinTitle: String? = nil
-    @State private var mapPreviewRegion: MKCoordinateRegion = MKCoordinateRegion()
-    @State private var mapPreviewPosition: MapCameraPosition = .automatic
     @State private var showDeleteAlert: Bool = false
 
     // Segment editing state
@@ -62,23 +55,19 @@ struct ParkingSpotDetailView: View {
     }
 
     @AppStorage("alertLeadMinutes") private var leadMinutes: Int = 15
-    @AppStorage("autoScheduleAlertOnPark") private var autoScheduleOnPark: Bool = false
 
     private let ocrService = VisionOCRService()
     private let localParser = ParkingTextParser()
     
     @Query private var cars: [Car]
-    @State private var selectedCarID: UUID? = nil
+    @StateObject private var locationManager = LocationManager()
+    @State private var parking = SpotParkingModel()
 
     // Auto-created or matched spot to edit after scan
     @State private var newSpotForEdit: ParkingSpot? = nil
     // Use this to attach analysis results to the correct spot if we merged/created by address
     @State private var analysisSpotOverride: ParkingSpot? = nil
 
-    @State private var showSchedulePrompt: Bool = false
-    @State private var promptCar: Car? = nil
-    @State private var nextRestrictionForPrompt: Date? = nil
-    @State private var pendingAlerts: [String: Date] = [:] // carID.uuidString -> next fire date
 
     private var currentUserID: UUID? {
         LocalIdentity.userID
@@ -86,16 +75,6 @@ struct ParkingSpotDetailView: View {
     
     private var spotCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: spot.latitude, longitude: spot.longitude)
-    }
-    
-    private var activeCarSession: ParkSession? {
-        spot.parkSessions.first(where: { session in
-            session.endedAt == nil && session.car != nil
-        })
-    }
-
-    private var activeCar: Car? {
-        activeCarSession?.car
     }
     
     private var lastScanSignalStatus: ParkingSignalStatus? {
@@ -107,45 +86,29 @@ struct ParkingSpotDetailView: View {
     
     private var spotSignalStatus: ParkingSignalStatus { ParkingSignalEvaluator.status(for: spot, now: Date(), leadMinutes: leadMinutes) }
 
-    private var carSelectionBinding: Binding<UUID?> {
-        Binding<UUID?> (
-            get: { selectedCarID },
-            set: { newID in
-                selectedCarID = newID
-                assignSelectedCar()
-            }
-        )
-    }
-
     var body: some View {
         List {
             signalStatusSection()
-            parkingSection()
-            upcomingSection()
-            assignCarSection()
+            SpotParkingSections(spot: spot, model: parking)
             locationSection()
-            segmentMapPreviewSection()
-            segmentEditorSection()
-            cityDatasetSection()
+            SpotSegmentSections(
+                spot: spot,
+                segmentEditScan: $segmentEditScan,
+                deviceCoordinate: locationManager.lastLocation?.coordinate,
+                presentMap: presentMap
+            )
+            SpotCityDataSection(spot: spot)
             savedScanSection()
             restrictionsSection()
-            dangerZoneSection()
+            SpotDangerZoneSection { showDeleteAlert = true }
 
-            if isAnalyzing {
-                analyzingSection()
-            }
-
-            if !ocrText.isEmpty {
-                lastOCRSection()
-            }
-
-            if usedAIParsing != nil {
-                parsingInfoSection()
-            }
-
-            if scanError != nil {
-                scanErrorSection()
-            }
+            SpotScanStatusSections(
+                isAnalyzing: isAnalyzing,
+                ocrText: ocrText,
+                usedAIParsing: usedAIParsing,
+                aiFallbackReason: aiFallbackReason,
+                scanError: scanError
+            )
         }
         .navigationTitle("Spot Details")
         .toolbar {
@@ -276,7 +239,7 @@ struct ParkingSpotDetailView: View {
                     onSubmit: { mergedText, filenames in
                         Task { @MainActor in
                             // Resolve coordinate and reverse geocode to an address label
-                            let coord = currentDeviceCoordinate() ?? spotCoordinate
+                            let coord = locationManager.lastLocation?.coordinate ?? spotCoordinate
                             let address = await reverseGeocode(coord)
 
                             // Find or create a ParkingSpot by normalized address (main actor)
@@ -414,7 +377,7 @@ struct ParkingSpotDetailView: View {
             SpotEditView(spot: spot)
                 .environment(\.modelContext, context)
         }
-        .sheet(isPresented: $showCarPickerSheet) {
+        .sheet(isPresented: $parking.showCarPicker) {
             NavigationStack {
                 List {
                     Section("Select a Car") {
@@ -424,8 +387,8 @@ struct ParkingSpotDetailView: View {
                         } else {
                             ForEach(cars, id: \.id) { car in
                                 Button {
-                                    startParking(for: car)
-                                    showCarPickerSheet = false
+                                    parking.park(car, at: spot, context: context)
+                                    parking.showCarPicker = false
                                 } label: {
                                     HStack(spacing: 12) {
                                         Image(systemName: car.iconName).foregroundStyle(.tint)
@@ -443,7 +406,7 @@ struct ParkingSpotDetailView: View {
                 }
                 .navigationTitle("Park Here")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showCarPickerSheet = false } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { parking.showCarPicker = false } }
                 }
             }
         }
@@ -466,21 +429,25 @@ struct ParkingSpotDetailView: View {
         }
         .onAppear {
             if let current = spot.parkSessions.first(where: { $0.endedAt == nil && $0.car != nil })?.car?.id {
-                selectedCarID = current
+                parking.selectedCarID = current
             }
-            refreshPendingAlerts()
+            parking.refresh(for: spot)
+            locationManager.ensureAuthorized()
+        }
+        .onDisappear {
+            locationManager.stopUpdatingLocation()
         }
         .onChange(of: spot.parkSessions.map { $0.endedAt == nil ? ($0.car?.id ?? UUID()) : nil }.count) { _, _ in
-            refreshPendingAlerts()
+            parking.refresh(for: spot)
         }
-        .alert("Schedule Alert?", isPresented: $showSchedulePrompt) {
+        .alert("Schedule Alert?", isPresented: $parking.showSchedulePrompt) {
             Button("Schedule") {
-                if let car = promptCar { scheduleNextRestrictionNotification(for: car, at: spot); refreshPendingAlerts() }
-                promptCar = nil
+                if let car = parking.promptCar { parking.scheduleMoveAlert(for: car, at: spot, context: context) }
+                parking.promptCar = nil
             }
-            Button("Not now", role: .cancel) { promptCar = nil }
+            Button("Not now", role: .cancel) { parking.promptCar = nil }
         } message: {
-            if let when = nextRestrictionForPrompt {
+            if let when = parking.nextRestrictionForPrompt {
                 Text("Schedule an alert for \(when.formatted(date: .abbreviated, time: .shortened))?")
             } else {
                 Text("Schedule an alert for the next restriction at this spot?")
@@ -516,119 +483,6 @@ struct ParkingSpotDetailView: View {
     }
 
     @ViewBuilder
-    private func parkingSection() -> some View {
-        Section(header: Text("Parking")) {
-            if let car = activeCar {
-                HStack(spacing: 8) {
-                    Image(systemName: car.iconName)
-                        .foregroundStyle(.tint)
-                    Text("\(car.nickname) is parked here")
-                        .foregroundStyle(.green)
-                }
-            }
-            if spot.isCurrentlyParked {
-                HStack(spacing: 8) {
-                    Image(systemName: "parkingsign.circle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .green)
-                    Text("You're parked here")
-                        .foregroundStyle(.green)
-                }
-                Button(role: .destructive) {
-                    endGenericParking()
-                } label: {
-                    Label("End Parking", systemImage: "xmark.circle")
-                }
-            } else {
-                Text("Not parked here")
-                    .foregroundColor(.secondary)
-                Button {
-                    showCarPickerSheet = true
-                } label: {
-                    Label("Park Here", systemImage: "parkingsign")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func upcomingSection() -> some View {
-        Section(header: Text("Upcoming")) {
-            // Upcoming restrictions for this spot (next 3)
-            let items = upcomingRestrictions(limit: 3)
-            if items.isEmpty {
-                Text("No upcoming restrictions found.").foregroundColor(.secondary)
-            } else {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, entry in
-                    let r = entry.0
-                    let date = entry.1
-                    HStack {
-                        Image(systemName: "calendar")
-                        VStack(alignment: .leading) {
-                            Text(r.type.displayName)
-                            Text(date.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-
-            // Scheduled alerts for currently parked cars at this spot
-            let activeCarSessions = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-            if activeCarSessions.isEmpty {
-                Text("No cars parked here.").foregroundColor(.secondary)
-            } else {
-                ForEach(activeCarSessions, id: \.id) { sess in
-                    if let car = sess.car {
-                        let key = car.id.uuidString
-                        let fire = pendingAlerts[key]
-                        HStack {
-                            Image(systemName: car.iconName).foregroundStyle(.tint)
-                            VStack(alignment: .leading) {
-                                Text(car.nickname)
-                                if let fire { Text("Alert: \(fire.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundColor(.secondary) }
-                                else { Text("No alert scheduled").font(.caption).foregroundColor(.secondary) }
-                            }
-                            Spacer()
-                            if fire == nil {
-                                Button("Schedule") { scheduleNextRestrictionNotification(for: car, at: spot); refreshPendingAlerts() }
-                                    .buttonStyle(.bordered)
-                            } else {
-                                Button("Cancel") { cancelAlert(for: car); refreshPendingAlerts() }
-                                    .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func assignCarSection() -> some View {
-        Section("Assign Car to This Spot") {
-            Picker("Car", selection: carSelectionBinding) {
-                Text("None").tag(Optional<UUID>.none)
-                ForEach(cars, id: \.id) { car in
-                    Text(car.nickname).tag(Optional(car.id))
-                }
-            }
-            if let selID = selectedCarID {
-                if let active = activeSession(for: selID) {
-                    Button(role: .destructive) {
-                        endParking(for: selID)
-                    } label: {
-                        Label("End Parking for \(active.car?.nickname ?? "Car")", systemImage: "xmark.circle")
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
     private func locationSection() -> some View {
         Section(header: Text("Location")) {
             Button {
@@ -643,259 +497,6 @@ struct ParkingSpotDetailView: View {
                         .foregroundStyle(.primary)
                     Spacer()
                     Image(systemName: "chevron.right").foregroundColor(.secondary)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func segmentMapPreviewSection() -> some View {
-        Section(header: Text("Map Preview")) {
-            let last = spot.signScans.sorted(by: { $0.createdAt > $1.createdAt }).first
-            let center = CLLocationCoordinate2D(
-                latitude: last?.segmentCenterLat ?? last?.latitude ?? spot.latitude,
-                longitude: last?.segmentCenterLon ?? last?.longitude ?? spot.longitude
-            )
-            Map(position: $mapPreviewPosition) {
-                if let last, let dir = last.segmentDirection ?? last.heading {
-                    let pts = CurbGeometry.curbAlignedPolyline(
-                        center: center,
-                        directionDegrees: dir,
-                        sideRaw: last.segmentStreetSide ?? spot.streetSide,
-                        lengthMeters: (last.segmentRadius ?? 15) * 2,
-                        offsetMeters: 4.5
-                    )
-                    let status = ParkingSignalEvaluator.status(for: last, now: Date(), leadMinutes: leadMinutes)
-                    MapPolyline(coordinates: pts)
-                        .stroke(status.color.opacity(0.28), style: StrokeStyle(lineWidth: 18, lineCap: .round, lineJoin: .round))
-                    MapPolyline(coordinates: pts)
-                        .stroke(status.color, style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
-                } else {
-                    MapCircle(center: center, radius: 15)
-                        .stroke(Color.accentColor.opacity(0.4), lineWidth: 2)
-                        .foregroundStyle(Color.accentColor.opacity(0.08))
-                }
-                // Spot pin
-                Annotation(spot.location, coordinate: CLLocationCoordinate2D(latitude: spot.latitude, longitude: spot.longitude)) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.red)
-                        .shadow(radius: 1)
-                }
-            }
-            .frame(height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(alignment: .topTrailing) {
-                HStack(spacing: 8) {
-                    Button {
-                        let coord = spotCoordinate
-                        mapRegion = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
-                        mapPinTitle = spot.location
-                        showMapSheet = true
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .padding(6)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-
-                    Button {
-                        if let scan = lastScan {
-                            segmentEditScan = scan
-                        } else {
-                            let scan = createOrFetchSegmentScan()
-                            segmentEditScan = scan
-                        }
-                    } label: {
-                        Image(systemName: "pencil.and.outline")
-                            .padding(6)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(8)
-            }
-            .onAppear {
-                mapPreviewPosition = .region(MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.0025, longitudeDelta: 0.0025)))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func segmentEditorSection() -> some View {
-        Section(header: Text("Curb Segment")) {
-            if let scan = lastScan {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let lat = scan.segmentCenterLat, let lon = scan.segmentCenterLon {
-                        HStack(spacing: 8) {
-                            Image(systemName: "mappin")
-                            Text(String(format: "Center: %.5f, %.5f", lat, lon))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else {
-                        HStack(spacing: 8) {
-                            Image(systemName: "mappin")
-                            Text("Center: not set")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.left.and.right")
-                        Text("Side: \((scan.segmentStreetSide ?? spot.streetSide).capitalized)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack(spacing: 8) {
-                        Image(systemName: "ruler")
-                        Text("Length: ~\(Int((scan.segmentRadius ?? 15) * 2)) m")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: Binding<Double>(
-                        get: { (scan.segmentRadius ?? 15) * 2 },
-                        set: { newLength in
-                            scan.segmentRadius = max(5, newLength / 2)
-                            try? context.save()
-                        }
-                    ), in: 10...100, step: 2)
-
-                    Toggle("Specify Direction", isOn: Binding<Bool>(
-                        get: { (scan.segmentDirection ?? scan.heading) != nil },
-                        set: { on in
-                            if on {
-                                // If no explicit direction yet, use existing heading or 0
-                                if scan.segmentDirection == nil { scan.segmentDirection = scan.heading ?? 0 }
-                            } else {
-                                scan.segmentDirection = nil
-                            }
-                            try? context.save()
-                        }
-                    ))
-
-                    if (scan.segmentDirection ?? scan.heading) != nil {
-                        let dir = (scan.segmentDirection ?? scan.heading ?? 0)
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                            Text("Direction: \(Int(dir))°")
-                            Spacer()
-                        }
-                        Slider(value: Binding<Double>(
-                            get: { scan.segmentDirection ?? dir },
-                            set: { nv in
-                                scan.segmentDirection = CurbGeometry.normalizedHeading(nv)
-                                try? context.save()
-                            }
-                        ), in: 0...360, step: 1)
-                    }
-
-                    HStack {
-                        Button {
-                            // Use scan raw pin as center
-                            scan.segmentCenterLat = scan.latitude
-                            scan.segmentCenterLon = scan.longitude
-                            try? context.save()
-                        } label: {
-                            Label("Use Scan as Center", systemImage: "mappin")
-                        }
-
-                        Spacer()
-
-                        Button {
-                            // Use device location as center if available
-                            if let c = currentDeviceCoordinate() {
-                                scan.segmentCenterLat = c.latitude
-                                scan.segmentCenterLon = c.longitude
-                                try? context.save()
-                            }
-                        } label: {
-                            Label("Use My Location", systemImage: "location")
-                        }
-                    }
-
-                    HStack {
-                        Button {
-                            segmentEditScan = scan
-                        } label: {
-                            Label("Edit on Map", systemImage: "pencil.and.outline")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Spacer()
-
-                        Button(role: .destructive) {
-                            clearSegment(for: scan)
-                        } label: {
-                            Label("Clear", systemImage: "trash")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    Button {
-                        scan.segmentCenterLat = spot.latitude
-                        scan.segmentCenterLon = spot.longitude
-                        try? context.save()
-                    } label: {
-                        Label("Use Spot as Center", systemImage: "mappin.circle")
-                    }
-                }
-            } else {
-                Text("No scans yet for this spot.")
-                    .foregroundColor(.secondary)
-                Button {
-                    let scan = createOrFetchSegmentScan()
-                    segmentEditScan = scan
-                } label: {
-                    Label("Create Segment", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func cityDatasetSection() -> some View {
-        Section(header: Text("City Dataset (Sample)")) {
-            if let name = matchedCityName {
-                Text("Matched city: \(name)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("No sample dataset for this area")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Button {
-                Task { await fetchCityRestrictions() }
-            } label: {
-                Label(loadingCityData ? "Fetching…" : (cityRestrictions.isEmpty ? "Fetch Nearby Restrictions" : "Refresh Nearby Restrictions"), systemImage: "arrow.clockwise")
-            }
-            .disabled(loadingCityData)
-
-            if loadingCityData {
-                HStack { ProgressView(); Text("Loading nearby restrictions…") }
-            }
-
-            if let err = cityDataError {
-                Text(err).foregroundColor(.red)
-            }
-
-            if !cityRestrictions.isEmpty {
-                ForEach(Array(cityRestrictions.enumerated()), id: \.offset) { _, r in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(r.type.displayName).font(.headline)
-                        Text("\(daysDescription(r.daysOfWeek)) • \(r.startTime) - \(r.endTime)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        if let n = r.notes, !n.isEmpty { Text(n).font(.caption).foregroundColor(.secondary) }
-                    }
-                }
-                Button {
-                    Task { await importCityRestrictions() }
-                } label: {
-                    Label("Import into This Spot", systemImage: "tray.and.arrow.down")
                 }
             }
         }
@@ -1024,183 +625,7 @@ struct ParkingSpotDetailView: View {
         }
     }
     
-    @ViewBuilder
-    private func dangerZoneSection() -> some View {
-        Section {
-            Button(role: .destructive) {
-                showDeleteAlert = true
-            } label: {
-                Label("Delete Spot", systemImage: "trash")
-            }
-        } header: {
-            Text("Danger Zone")
-        }
-    }
-
-    @ViewBuilder
-    private func analyzingSection() -> some View {
-        Section {
-            HStack {
-                ProgressView()
-                Text("Analyzing sign…")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func lastOCRSection() -> some View {
-        Section(header: Text("Last OCR Text")) {
-            Text(ocrText)
-                .textSelection(.enabled)
-                .font(.body.monospaced())
-        }
-    }
-
-    @ViewBuilder
-    private func parsingInfoSection() -> some View {
-        Section {
-            HStack {
-                Image(systemName: (usedAIParsing ?? false) ? "bolt.horizontal.circle" : "cpu")
-                Text((usedAIParsing ?? false) ? "Parsed using AI" : "Parsed locally")
-                    .font(.subheadline)
-                Spacer()
-                if let reason = aiFallbackReason, usedAIParsing == false {
-                    Text(reason)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func scanErrorSection() -> some View {
-        if let scanError {
-            Section {
-                Text(scanError)
-                    .foregroundColor(.red)
-            }
-        }
-    }
-
-    private func assignSelectedCar() {
-        guard let selID = selectedCarID, let car = cars.first(where: { $0.id == selID }) else { return }
-        do {
-            // End any active session for this car
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == car.id && s.endedAt == nil { s.endedAt = Date() }
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: car)
-            context.insert(session)
-            try context.save()
-            if autoScheduleOnPark {
-                scheduleNextRestrictionNotification(for: car, at: spot)
-            } else {
-                promptCar = car
-                nextRestrictionForPrompt = spot.nextRestrictionDate()
-                showSchedulePrompt = true
-            }
-        } catch { }
-    }
-
-    private func endParking(for carID: UUID) {
-        do {
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == carID && s.spot?.id == spot.id && s.endedAt == nil { s.endedAt = Date() }
-            try context.save()
-        } catch { }
-    }
-
-    private func scheduleNextRestrictionNotification(for car: Car, at spot: ParkingSpot) {
-        guard let start = spot.nextRestrictionDate() else { return }
-        // Fire the alert the user's lead time BEFORE the restriction starts (not at start).
-        let lead = TimeInterval(max(0, NotificationManager.shared.leadMinutes) * 60)
-        let next = max(start.addingTimeInterval(-lead), Date().addingTimeInterval(2))
-        let center = UNUserNotificationCenter.current()
-        let id = "nextRestriction.car.\(car.id.uuidString).spot.\(spot.id.uuidString)"
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-        let content = UNMutableNotificationContent()
-        content.title = "Move your \(car.nickname)"
-        content.body = "Restriction at \(spot.location) starts soon."
-        content.sound = .default
-        if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: next)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        center.add(req)
-        // Save routing metadata as well for AlarmService to match
-        Task { @MainActor in
-            AlarmService.shared.objectWillChange.send()
-            // store metadata for notification
-            // We can't call a private save method here; instead schedule an AlarmKit countdown with metadata
-            let seconds = next.timeIntervalSinceNow
-            if seconds > 1 {
-                _ = await AlarmService.shared.requestAuthorization()
-                do {
-                    let _ = try await AlarmService.shared.scheduleCountdown(seconds: seconds, title: LocalizedStringResource("Restriction Starts"), carID: car.id, spotID: spot.id)
-                } catch { }
-            }
-        }
-    }
-
-    private func cancelAlert(for car: Car) {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { reqs in
-            let ids = reqs.map { $0.identifier }.filter { $0.hasPrefix("nextRestriction.car.\(car.id.uuidString).spot.") }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
-        }
-    }
-
-    private func refreshPendingAlerts() {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { reqs in
-            var map: [String: Date] = [:]
-            let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-            for s in active {
-                if let car = s.car {
-                    let idPrefix = "nextRestriction.car.\(car.id.uuidString).spot."
-                    if let r = reqs.first(where: { $0.identifier.hasPrefix(idPrefix) }), let trig = r.trigger as? UNCalendarNotificationTrigger, let date = trig.nextTriggerDate() {
-                        map[car.id.uuidString] = date
-                    }
-                }
-            }
-            DispatchQueue.main.async { self.pendingAlerts = map }
-        }
-    }
-
-    private func upcomingRestrictions(limit: Int = 3, from now: Date = Date()) -> [(Restriction, Date)] {
-        let cal = Calendar.current
-        var results: [(Restriction, Date)] = []
-        for r in spot.restrictions {
-            // Skip if days not set; we can't predict windows
-            let days = r.daysOfWeek
-            if days.isEmpty { continue }
-            // For the next 14 days, collect starts
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = (cal.component(.weekday, from: day) + 6) % 7
-                guard days.contains(w) else { continue }
-                let sh = cal.component(.hour, from: r.startTime)
-                let sm = cal.component(.minute, from: r.startTime)
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = sh; comps.minute = sm; comps.second = 0
-                if let start = cal.date(from: comps), start > now {
-                    results.append((r, start))
-                }
-            }
-        }
-        results.sort { $0.1 < $1.1 }
-        if results.count > limit { return Array(results.prefix(limit)) }
-        return results
-    }
-
-    private func activeSession(for carID: UUID) -> ParkSession? {
-        spot.parkSessions.first(where: { session in
-            session.endedAt == nil && session.car?.id == carID
-        })
-    }
+    private var sessions: ParkingSessionService { ParkingSessionService(context: context) }
 
     private func startScan() {
         scanError = nil
@@ -1224,119 +649,18 @@ struct ParkingSpotDetailView: View {
         }
     }
 
-    private func endGenericParking() {
-        do {
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.endedAt == nil && s.spot?.id == spot.id && s.car == nil { s.endedAt = Date() }
-            try context.save()
-        } catch {
-        }
-    }
-    
     private func enrichFromCityData() async {
-        await ParkingDataProvider.shared.bootstrapIfNeeded(currentLocation: spotCoordinate)
-        let cityRestrictions = await ParkingDataProvider.shared.restrictionsNear(spotCoordinate)
-        guard !cityRestrictions.isEmpty else { return }
-        for cr in cityRestrictions {
-            let start = DateTimeUtils.parseHHmm(cr.startTime) ?? (8, 0)
-            let end = DateTimeUtils.parseHHmm(cr.endTime) ?? (10, 0)
-            let startDate = DateTimeUtils.todayAt(hour: start.0, minute: start.1)
-            var endDate = DateTimeUtils.todayAt(hour: end.0, minute: end.1)
-            if endDate <= startDate { endDate = endDate.addingTimeInterval(24*60*60) }
-            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: UUID(), signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
-            context.insert(r)
-            spot.restrictions.append(r)
-        }
-        try? context.save()
-        await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot)
-    }
-
-    @MainActor
-    private func fetchCityRestrictions() async {
-        loadingCityData = true
-        cityDataError = nil
-        cityRestrictions = []
-        await ParkingDataProvider.shared.bootstrapIfNeeded(currentLocation: spotCoordinate)
-        matchedCityName = ParkingDataProvider.shared.matchedCity?.cityName
-        let items = await ParkingDataProvider.shared.restrictionsNear(spotCoordinate)
-        if items.isEmpty {
-            if matchedCityName == nil {
-                cityDataError = "No sample dataset available for this area. Try a spot in San Francisco or New York City."
-            } else {
-                cityDataError = "No sample restrictions found near this spot. Try moving closer to the city center."
-            }
-            let gen = UINotificationFeedbackGenerator(); gen.notificationOccurred(.warning)
-        } else {
-            cityRestrictions = items
-            let gen = UINotificationFeedbackGenerator(); gen.notificationOccurred(.success)
-        }
-        loadingCityData = false
-    }
-
-    @MainActor
-    private func importCityRestrictions() async {
-        guard !cityRestrictions.isEmpty else { return }
-        for cr in cityRestrictions {
-            let start = DateTimeUtils.parseHHmm(cr.startTime) ?? (8, 0)
-            let end = DateTimeUtils.parseHHmm(cr.endTime) ?? (10, 0)
-            let startDate = DateTimeUtils.todayAt(hour: start.0, minute: start.1)
-            var endDate = DateTimeUtils.todayAt(hour: end.0, minute: end.1)
-            if endDate <= startDate { endDate = endDate.addingTimeInterval(24 * 60 * 60) }
-            let r = Restriction(type: cr.type, startTime: startDate, endTime: endDate, daysOfWeek: cr.daysOfWeek, sourceUser: UUID(), signPhotoFilename: nil, ocrText: "City dataset", spot: spot)
-            context.insert(r)
-            spot.restrictions.append(r)
-        }
-        try? context.save()
-        await NotificationManager.shared.schedule(for: spot.restrictions, spot: spot)
-    }
-
-    private func daysDescription(_ days: [Int]) -> String {
-        let symbols = Calendar.current.shortWeekdaySymbols // Sun..Sat
-        let labels = days.compactMap { (0...6).contains($0) ? symbols[$0] : nil }
-        return labels.isEmpty ? "None" : labels.joined(separator: ", ")
-    }
-
-    private func startParking(for car: Car) {
-        do {
-            // End any active session for this car
-            let all = try context.fetch(FetchDescriptor<ParkSession>())
-            for s in all where s.car?.id == car.id && s.endedAt == nil { s.endedAt = Date() }
-            // Start a new session at this spot
-            let session = ParkSession(spot: spot, startedAt: Date(), endedAt: nil, car: car)
-            context.insert(session)
-            try context.save()
-            if autoScheduleOnPark {
-                scheduleNextRestrictionNotification(for: car, at: spot)
-            } else {
-                promptCar = car
-                nextRestrictionForPrompt = spot.nextRestrictionDate()
-                showSchedulePrompt = true
-            }
-        } catch { }
-    }
-
-    private func currentDeviceCoordinate() -> CLLocationCoordinate2D? {
-        let manager = CLLocationManager()
-        return manager.location?.coordinate
+        await CityRestrictionImporter.importNear(spot: spot, context: context)
     }
 
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> String? {
-        let geocoder = CLGeocoder()
-        do {
-            let placemarks = try await geocoder.reverseGeocodeLocation(CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
-            if let p = placemarks.first {
-                let parts = [p.name, p.locality, p.administrativeArea].compactMap { $0 }.filter { !$0.isEmpty }
-                if !parts.isEmpty { return parts.joined(separator: ", ") }
-                if let line = p.postalAddress?.street { return line }
-            }
-            return nil
-        } catch {
-            return nil
-        }
+        await SpotLocationUtils.reverseGeocode(coordinate)
     }
 
-    private func normalized(_ s: String?) -> String {
-        return (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    private func presentMap(_ coordinate: CLLocationCoordinate2D, _ title: String?) {
+        mapRegion = MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
+        mapPinTitle = title
+        showMapSheet = true
     }
 
     @MainActor
@@ -1352,7 +676,9 @@ struct ParkingSpotDetailView: View {
     private func deleteSpot() {
         // Cancel pending alerts for any cars parked here
         let active = spot.parkSessions.filter { $0.endedAt == nil && $0.car != nil }
-        for s in active { if let car = s.car { cancelAlert(for: car) } }
+        let parkedCarIDs = active.compactMap { $0.car?.id }
+        let service = sessions
+        Task { for id in parkedCarIDs { await service.cancelMoveAlert(forCarID: id) } }
 
         // Cancel the repeating weekly alarms for this spot's restrictions before deleting.
         let restrictionIDs = spot.restrictions.map { $0.id }
@@ -1369,54 +695,4 @@ struct ParkingSpotDetailView: View {
         dismiss()
     }
 
-    @MainActor
-    private func createOrFetchSegmentScan() -> SignScan {
-        if let scan = lastScan { return scan }
-        let coord = spotCoordinate
-        let scan = SignScan(
-            latitude: coord.latitude,
-            longitude: coord.longitude,
-            ocrText: "",
-            createdAt: Date(),
-            photoFilename: nil,
-            additionalPhotoFilenames: [],
-            photoFilenames: [],
-            mergedOCRText: "",
-            address: spot.location,
-            status: "incomplete",
-            sourceUser: currentUserID,
-            spot: spot,
-            segmentCenterLat: coord.latitude,
-            segmentCenterLon: coord.longitude,
-            segmentRadius: 15.0,
-            segmentStreetSide: spot.streetSide
-        )
-        context.insert(scan)
-        spot.attach(scan: scan)
-        try? context.save()
-        return scan
-    }
-
-    private func clearSegment(for scan: SignScan) {
-        scan.segmentCenterLat = nil
-        scan.segmentCenterLon = nil
-        scan.segmentRadius = nil
-        scan.segmentDirection = nil
-        try? context.save()
-    }
-
-    @ViewBuilder
-    private func signalBadge(for status: ParkingSignalStatus) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: status.iconName)
-                .accessibilityHidden(true)
-            Text(status.label)
-        }
-        .font(.caption)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(status.color.opacity(0.12))
-        .foregroundStyle(status.color)
-        .clipShape(Capsule())
-    }
 }

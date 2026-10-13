@@ -274,6 +274,20 @@ final class AlarmService: ObservableObject {
         self.objectWillChange.send()
     }
 
+    /// Cancel every alarm or fallback notification tagged with this car.
+    func cancelAlarms(forCarID carID: UUID) async {
+        for alarm in await allAlarms() where alarm.carID == carID {
+            switch alarm.source {
+            case .alarmKit:
+                await cancel(id: alarm.id)
+            case .notification:
+                if let identifier = alarm.notificationIdentifier {
+                    await cancelNotification(identifier: identifier)
+                }
+            }
+        }
+    }
+
     /// Cancel all scheduled alarms — both AlarmKit alarms and pending local notifications.
     func cancelAll() async {
         #if canImport(AlarmKit)

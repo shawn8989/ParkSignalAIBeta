@@ -143,7 +143,7 @@ struct ParkingSignalEvaluator {
         }
 
         // YELLOW: an illegal restriction (noParking/streetCleaning) starts within leadMinutes
-        if let next = nextIllegalStart(for: spot, from: now) {
+        if let next = nextIllegalStart(from: spot.restrictions, now: now) {
             if next.timeIntervalSince(now) <= TimeInterval(max(0, leadMinutes)) * 60 {
                 return .yellow
             }
@@ -237,80 +237,36 @@ struct ParkingSignalEvaluator {
 
     // MARK: - Helpers
 
-    private static func nextIllegalStart(for spot: ParkingSpot, from now: Date) -> Date? {
+    /// Earliest future start of a blocking (No Parking / Street Cleaning) window.
+    private static func nextIllegalStart(from restrictions: [Restriction], now: Date) -> Date? {
         let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        for r in spot.restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
+        return restrictions
+            .filter { $0.type == .noParking || $0.type == .streetCleaning }
+            .compactMap { r in
+                nextStart(days: r.daysOfWeek,
+                          hour: cal.component(.hour, from: r.startTime),
+                          minute: cal.component(.minute, from: r.startTime),
+                          now: now, calendar: cal)
             }
-        }
-        return best
+            .min()
     }
 
     private static func nextIllegalStart(for analysis: AIAnalysisResponse, from now: Date) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func parseHHmm(_ s: String) -> (Int, Int)? {
-            let parts = s.split(separator: ":")
-            guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]), (0..<24).contains(h), (0..<60).contains(m) else { return nil }
-            return (h, m)
-        }
-        var best: Date? = nil
-        for r in analysis.restrictions where (r.type == .no_parking || r.type == .street_cleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            guard let (h, m) = parseHHmm(r.startTime) else { continue }
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
+        analysis.restrictions
+            .filter { $0.type == .no_parking || $0.type == .street_cleaning }
+            .compactMap { r in
+                DateTimeUtils.parseHHmm(r.startTime).flatMap { t in
+                    nextStart(days: r.daysOfWeek, hour: t.hour, minute: t.minute, now: now, calendar: .current)
+                }
             }
-        }
-        return best
+            .min()
     }
 
-    private static func nextIllegalStart(from restrictions: [Restriction], now: Date) -> Date? {
-        let cal = Calendar.current
-        func weekdayIndex0_6(_ date: Date) -> Int { (cal.component(.weekday, from: date) + 6) % 7 }
-        func hourMinute(_ date: Date) -> (Int, Int) { (cal.component(.hour, from: date), cal.component(.minute, from: date)) }
-        var best: Date? = nil
-        for r in restrictions where (r.type == .noParking || r.type == .streetCleaning) {
-            // Empty days = applies every day (matches isActive semantics).
-            let days = r.daysOfWeek.isEmpty ? Array(0...6) : r.daysOfWeek
-            let (h, m) = hourMinute(r.startTime)
-            for offset in 0...13 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let w = weekdayIndex0_6(day)
-                guard days.contains(w) else { continue }
-                var comps = cal.dateComponents([.year, .month, .day], from: day)
-                comps.hour = h; comps.minute = m; comps.second = 0
-                guard let candidate = cal.date(from: comps) else { continue }
-                if candidate <= now { continue }
-                if best == nil || candidate < best! { best = candidate }
-                break
-            }
-        }
-        return best
+    /// Empty days mean "every day", matching `DateTimeUtils.isWindowActive`.
+    private static func nextStart(days: [Int], hour: Int, minute: Int, now: Date, calendar: Calendar) -> Date? {
+        DateTimeUtils.nextOccurrence(daysOfWeek: days.isEmpty ? Array(0...6) : days,
+                                     hour: hour, minute: minute,
+                                     from: now, calendar: calendar, lookaheadDays: 13)
     }
 
 }
